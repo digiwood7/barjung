@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools==82.0.1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "barjung-media"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = ["Pillow==12.3.0"]
+
+[project.scripts]
+barjung-media = "barjung_media.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

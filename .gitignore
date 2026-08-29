@@ -10,3 +10,17 @@ test-results/
 *_token.json
 auth.json
 
+.vercel
+.env*
+!.env.example
+python/.venv/
+python/**/__pycache__/
+python/*.egg-info/
+runner/node_modules/
+playwright/.profiles/
+tmp/
+
+# 개발 PC에만 존재하는 에이전트 지침·참고 이미지
+AGENTS.md
+CLAUDE.md
+reference/
