@@ -1,0 +1,12 @@
+node_modules/
+.next/
+out/
+coverage/
+playwright-report/
+test-results/
+.DS_Store
+.env
+.env.local
+*_token.json
+auth.json
+
