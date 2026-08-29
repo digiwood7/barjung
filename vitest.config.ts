@@ -5,7 +5,7 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     setupFiles: ["./vitest.setup.ts"],
-    exclude: ["e2e/**", "runner/**", "node_modules/**"],
+    exclude: ["e2e/**", "runner/**", "tmp/**", "node_modules/**"],
   },
   resolve: {
     alias: { "@": path.resolve(import.meta.dirname, "./src") },
