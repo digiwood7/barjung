@@ -50,3 +50,21 @@ def test_upload_rejects_unsafe_storage_paths(tmp_path: Path) -> None:
     image.write_bytes(b"jpeg")
     with pytest.raises(ValueError, match="설정"):
         upload_file("https://example.supabase.co", "service-role", "property-media", "../outside.jpg", image)
+
+
+def test_expand_images_handles_wildcards_and_folders(tmp_path):
+    from barjung_media.cli import expand_images
+
+    (tmp_path / "a.jpg").write_bytes(b"x")
+    (tmp_path / "b.JPG").write_bytes(b"x")
+    (tmp_path / "note.txt").write_bytes(b"x")
+    folder = tmp_path / "more"
+    folder.mkdir()
+    (folder / "c.png").write_bytes(b"x")
+
+    wildcard = expand_images([tmp_path / "*.jpg"])
+    assert [p.name for p in wildcard] == ["a.jpg"]  # glob 은 대소문자 구분(윈도우에서는 b.JPG 도 잡힘)
+    from_folder = expand_images([folder])
+    assert [p.name for p in from_folder] == ["c.png"]
+    explicit = expand_images([tmp_path / "a.jpg", tmp_path / "missing.jpg"])
+    assert [p.name for p in explicit] == ["a.jpg", "missing.jpg"]  # 없는 파일은 optimize 단계에서 실패로 기록

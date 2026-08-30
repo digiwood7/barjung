@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import os
 from pathlib import Path
@@ -24,9 +25,30 @@ def parser() -> argparse.ArgumentParser:
     return result
 
 
+IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
+
+
+def expand_images(patterns: list[Path]) -> list[Path]:
+    """Windows PowerShell 은 *.jpg 를 풀어 주지 않으므로 여기서 와일드카드와 폴더를 펼친다."""
+    result: list[Path] = []
+    for pattern in patterns:
+        text = str(pattern)
+        if any(ch in text for ch in "*?["):
+            matches = sorted(Path(m) for m in glob.glob(text))
+        elif pattern.is_dir():
+            matches = sorted(p for p in pattern.iterdir() if p.suffix.lower() in IMAGE_SUFFIXES)
+        else:
+            matches = [pattern]
+        result.extend(m for m in matches if m.suffix.lower() in IMAGE_SUFFIXES or not m.exists())
+    return result
+
+
 def main() -> int:
     args = parser().parse_args()
-    manifest = optimize_batch(args.images, args.output, OptimizationOptions(max_edge=args.max_edge, quality=args.quality, target_kb=args.target_kb))
+    images = expand_images(args.images)
+    if not images:
+        raise SystemExit("처리할 사진이 없습니다. 경로나 와일드카드를 확인하세요.")
+    manifest = optimize_batch(images, args.output, OptimizationOptions(max_edge=args.max_edge, quality=args.quality, target_kb=args.target_kb))
     if args.upload:
         if not args.office_id or not args.property_id:
             raise SystemExit("--upload에는 --office-id와 --property-id가 필요합니다.")

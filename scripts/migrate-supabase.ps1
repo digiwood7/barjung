@@ -1,4 +1,4 @@
-param([Parameter(Mandatory = $true)][string]$ProjectRef)
+﻿param([Parameter(Mandatory = $true)][string]$ProjectRef)
 $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $ProjectRoot

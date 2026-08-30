@@ -1,4 +1,4 @@
-param([switch]$InstallMissing)
+﻿param([switch]$InstallMissing)
 $ErrorActionPreference = "Stop"
 
 $requirements = @(

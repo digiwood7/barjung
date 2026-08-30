@@ -5,7 +5,7 @@
 ## 1. 문서 정보
 
 - 상태: 구현 기준 확정본
-- 최종 갱신일: 2026-08-30
+- 최종 갱신일: 2026-08-30 (21절 변경 기록 추가)
 - 대상: 바를정공인중개사사무소
 - 핵심 매물: 경북대학교 인근 원룸, 투룸, 오피스텔
 - 운영 PC: 고객 소유 Windows PC 1대
@@ -105,6 +105,7 @@ flowchart TD
 - 플랫폼별 상태 자동 갱신과 개별 재시도
 - 환경변수가 없으면 비식별 데모 데이터로 전 기능 작동
 - 고객 Supabase 연결 시 동일 Repository 인터페이스로 전환
+- 연결 방식(2026-08-30 확정): 브라우저는 고객 PC 로컬 Next 서버의 `/api/*` 만 호출하고, 서버가 service role 키로 Supabase 를 읽고 쓴다. 관리자 로그인 확정 전에도 고객 계정만 연결하면 동작하며, 로그인 도입 시 이 API 계층 위에 인증만 얹는다(21절 참고).
 
 ### Supabase
 
@@ -239,7 +240,7 @@ AI는 고지값을 만들거나 추측하지 않으며 고지 블록은 사용�
 - public 테이블 전체 RLS, `anon` 업무 데이터 접근 금지
 - 향후 `app_metadata.office_id`와 역할로 권한 적용
 - `user_metadata`를 권한 판단에 사용하지 않음
-- service role과 공공데이터 키를 브라우저에 노출하지 않음
+- service role과 공공데이터 키를 브라우저에 노출하지 않음 — service role 은 고객 PC 로컬 Next 서버(Route Handler)와 Windows 실행기, Python 업로더만 사용
 - Storage는 private, 로그인 프로필은 고객 PC 저장소 밖 경로
 - 인증 확정 전 Vercel 실제 쓰기 기능 비활성화
 
@@ -311,3 +312,60 @@ Vercel은 고객 계정에서 최신 CLI로 로그인·연결하고, `vercel env
 - CAPTCHA·추가 인증 담당자
 
 이 결정은 설정 또는 독립 모듈로 추가하며 핵심 DB와 실행기 계약을 변경하지 않는다.
+
+## 21. 변경 기록 — 2026-08-30 고객 Supabase 연결 (Claude 작업, Codex 대조용)
+
+대표 지시: "supabase 계정만 연결하면 바로 작동할 수준까지", "파워셸 UTF-8 수정", "플랫폼 어댑터는 빈 껍데기 유지(고객 PC에서 Playwright 로 직접 연결)".
+
+### 21.1 구조 결정
+
+- RLS 정책이 `authenticated` + `app_metadata.office_id` 를 요구하는데 관리자 로그인은 20절 미결정 항목이라 브라우저가 Supabase 에 직접 붙을 수 없다.
+- 따라서 **고객 PC 의 로컬 Next 서버가 서버 전용 키(`SUPABASE_SERVICE_ROLE_KEY`)로 Supabase 에 접근**하고, 브라우저는 `localhost/api/*` 만 호출한다. 키는 `.env.local` 에만 있고 브라우저 번들에 들어가지 않는다.
+- `NEXT_PUBLIC_SUPABASE_*` 는 화면 코드에서 사용하지 않는다(로그인 도입 후 브라우저 직접 접속용으로 이름만 유지).
+- `BARJUNG_READ_ONLY=true` 면 저장 요청을 403 으로 막는다 — 14절 "인증 확정 전 Vercel 실제 쓰기 기능 비활성화" 구현.
+- 실시간 반영은 Realtime 대신 폴링: 화면 전체 5초, 배포 모달 2초(브라우저에 인증 세션이 없어 Realtime 구독 불가).
+
+### 21.2 파일별 변경
+
+| 구분 | 파일 | 내용 |
+|---|---|---|
+| 신규 | `src/lib/supabase/server.ts` | service role 클라이언트 생성(`readServerConfig`, `isReadOnly`, `createServiceClient`). 브라우저에서 호출되면 throw |
+| 신규 | `src/lib/supabase/mappers.ts` | DB 행 ↔ 화면 모델 순수 변환. 매물 유형·상태·재직 enum, 만원↔원, KST 날짜 표기, 다음 확인일 파싱, 법정 고지 13열, 플랫폼별 최신 배포 대상(`latestTargetsForProperty`), 실행기 온라인 판정(30초) |
+| 신규 | `src/lib/supabase/workspace.ts` | 데이터 서비스. 스냅샷 조회, 매물 CRUD(매물번호 `YYMMDD-NN` 채번, `legal_disclosures` upsert, `content_drafts` 플랫폼별 버전 관리), 고객·직원 CRUD, 설정 upsert, 배포 요청(`distribution_jobs` + `distribution_targets`, 멱등키 `매물:플랫폼:분`) |
+| 신규 | `src/lib/api/server.ts` | Route Handler 공통(`withLive`): 미설정 503 `NOT_CONFIGURED`, 조회 전용 403 `READ_ONLY`, 오류 400 정제 |
+| 신규 | `src/app/api/workspace/route.ts` | GET 스냅샷 |
+| 신규 | `src/app/api/{properties,customers,employees}/route.ts` + `[id]/route.ts` | GET/POST, GET/PATCH/DELETE |
+| 신규 | `src/app/api/settings/route.ts` | GET/PATCH |
+| 신규 | `src/app/api/distribution/route.ts` | POST `{propertyId, platforms?}` |
+| 신규 | `src/lib/api/client.ts` | 브라우저용 저장소(`createApiRepository`), 연결 판별(`connectRepository`: 503 이면 데모) |
+| 수정 | `src/lib/domain/types.ts` | `PLATFORMS`, `EmploymentStatus`(퇴사 추가), `Property.registeredById/copies`, `Customer.followUpAt`, `OfficeInfo`, `AgentStatus`, `WorkspaceSnapshot`, `defaultSettings` |
+| 수정 | `src/lib/domain/repository.ts` | `BarjungRepository` 에 `mode`, `loadWorkspace`, `getProperty`, `requestDistribution(id, platforms?)`, `updateSettings` 추가. 데모 구현 갱신 |
+| 분리 | `src/components/barjung-app.tsx` → `src/components/app/*` | 257줄 단일 파일을 `ui`, `shell`, `dashboard`, `properties-view`, `property-wizard`, `distribution-modal`, `customers-view`, `employees-view`, `settings-view`, `entity-modals`, `use-workspace` 로 분리. 승인된 클래스명·시각 언어 유지 |
+| 수정 | 화면 동작 | 하드코딩 제거: 사이드바 매물 수·프로필·실행기 상태, 상단 날짜(KST), 배포 실패 문구, 직원별 등록 매물 수, 저장공간 문구. 상단에 모드 배지. 마법사 입력값이 실제 저장됨(제목·유형·금액·주소·등록 직원·거래형태). 라이브 모드 마법사는 예시값 없이 빈 폼, 사진 단계는 CLI 안내. 매물 상세에 사진 업로드 명령(사업장·매물 ID 포함). 저장 실패는 모달 안 + 빨간 토스트 |
+| 수정 | `src/app/globals.css` | 모드 배지·오프라인 점·로딩·코드 블록·빈 목록 스타일 추가(끝부분) |
+| 수정 | `python/barjung_media/cli.py` | `expand_images`: 와일드카드·폴더 입력 처리(PowerShell 미확장 대응) |
+| 수정 | `scripts/*.ps1` (5개) | UTF-8 BOM 추가 — Windows PowerShell 5.1 한글 깨짐·구문 오류 방지 |
+| 수정 | `playwright.config.ts` | 전용 포트 3100, 기존 서버 재사용 금지, 데모 모드 강제 |
+| 수정 | `package.json` | `@supabase/supabase-js@2.112.4` 추가(runner 와 동일 버전) |
+| 수정 | `.env.example`, `README.md`, `docs/CUSTOMER_INSTALL.md`, `docs/DEPLOYMENT.md` | 연결 절차·모드·조회 전용 배포 반영 |
+| 신규 | `src/test/fake-supabase.ts` | 테스트용 메모리 Supabase(체인·unique 위반 23505·cascade) |
+| 신규 | `src/lib/supabase/{workspace,mappers}.test.ts`, `src/components/barjung-app.test.tsx`(라이브 모드 케이스 추가), `python/tests/test_optimizer.py`(와일드카드) | 검증 |
+
+### 21.3 변경하지 않은 것
+
+- `supabase/migrations`, `schemas`, `seed.sql` — 스키마는 그대로 사용. 새 열·테이블 없음.
+- `runner/` — 실행기·어댑터 코드 무변경. 화면이 만드는 `distribution_targets` 를 기존 `claim_distribution_target` RPC 가 그대로 가져간다.
+- 네 플랫폼 어댑터는 계속 `not_configured`.
+
+### 21.4 검증 결과 (2026-08-30, 개발 맥)
+
+- `npm test` 29/29, `npm run build` 성공(API 라우트 10개), `npx playwright test` 4/4, `pytest` 4/4, runner 5/5·typecheck 통과.
+- 실서버 기동 확인: 연결값 없음 → `/api/workspace` 503 `NOT_CONFIGURED`; 연결 불가 URL → 500 JSON 정제; 조회 전용 → 저장 403.
+- **미검증**: 실제 Supabase 프로젝트 대상 왕복. 개발 맥에 Docker 가 없어 로컬 Supabase 를 띄우지 못했고 개발용 원격 프로젝트도 없다. 데이터 서비스는 가짜 클라이언트(`src/test/fake-supabase.ts`)로 같은 쿼리 체인을 검증했다. 고객 PC 첫 연결 때 "고객 DB 연결" 배지·실행기 온라인·매물 1건 등록·전체 배포(4건 `not_configured`) 를 실측해야 한다.
+
+### 21.5 알려진 한계·후속
+
+- 다음 확인일: 라이브 모드는 날짜·시간 입력, 데모 모드는 자유 문자열.
+- 매물 상세의 사진 수는 `property_media` 행 수이며 실제 이미지는 화면에 표시하지 않는다(private 버킷 서명 URL 은 로그인 도입 후).
+- `app_settings.platform_settings.address_policy` 에 플랫폼별 주소 공개 범위를 저장하지만, 게시 시 주소 가공은 어댑터 연결 때 구현한다.
+- 저장소가 비공개라 고객 클론은 공개 전환 또는 초대가 필요하다(대표 처리).
