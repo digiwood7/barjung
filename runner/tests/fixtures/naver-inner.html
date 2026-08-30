@@ -1,0 +1,39 @@
+<!doctype html><html><head><meta charset="utf-8">
+<style>
+.se-popup-dim{position:fixed;inset:0;background:rgba(0,0,0,.3)} .se-popup-alert-confirm{position:fixed;top:40%;left:40%;background:#fff;padding:20px;z-index:2}
+[contenteditable]{min-height:24px;border:1px solid #ddd;padding:6px;margin:4px 0} .se-image img{max-width:200px;display:block}
+.layer{display:none;border:2px solid #333;padding:10px;margin-top:10px} .layer.open{display:block} .options{display:none} .options.open{display:block}
+</style></head>
+<body>
+<div class="se-popup-dim" id="dim"></div>
+<div class="se-popup-alert-confirm" id="popup"><p>이어서 작성하시겠습니까?</p><button class="se-popup-button-cancel" onclick="closePopup()">취소</button><button class="se-popup-button-confirm" onclick="closePopup()">확인</button></div>
+<div class="se-toolbar">
+  <button type="button" id="imgbtn" onclick="document.getElementById('file').click()">사진</button>
+  <input type="file" id="file" style="display:none" onchange="onFile(this)">
+  <button type="button" class="save_btn__a1b2" onclick="document.getElementById('status').textContent='SAVED'">저장</button>
+  <button type="button" class="publish_btn__c3d4" onclick="document.getElementById('layer').classList.add('open')">발행</button>
+</div>
+<div class="se-title-text se-text-paragraph" contenteditable="true" id="title"></div>
+<div id="body">
+  <div class="se-component se-text"><div class="se-text-paragraph" contenteditable="true"></div></div>
+</div>
+<div class="layer layer_publish__e5f6" id="layer">
+  <button type="button" class="selectbox_button__g7h8" id="catbtn" onclick="document.getElementById('opts').classList.toggle('open')">게시판</button>
+  <ul class="options" id="opts"><li role="option" onclick="pick(this)">IT&nbsp;뉴스</li><li role="option" onclick="pick(this)">매물&nbsp;소개</li></ul>
+  <button type="button" class="confirm_btn__i9j0" onclick="document.getElementById('status').textContent='PUBLISHED:'+document.getElementById('catbtn').textContent">발행</button>
+</div>
+<div id="status"></div>
+<script>
+function closePopup(){document.getElementById('popup').remove();document.getElementById('dim').remove();}
+function pick(li){document.getElementById('catbtn').textContent=li.textContent;document.getElementById('opts').classList.remove('open');}
+function onFile(input){
+  const body=document.getElementById('body');
+  const img=document.createElement('div'); img.className='se-component se-image';
+  img.innerHTML='<img alt="'+input.files[0].name+'" data-name="'+input.files[0].name+'"><div class="se-caption" contenteditable="true" data-placeholder="사진 설명을 입력하세요"></div>';
+  body.appendChild(img);
+  // 실제 SmartEditor 처럼 이미지 아래에 새 본문 단락이 생기고 커서가 그리로 간다
+  const text=document.createElement('div'); text.className='se-component se-text'; text.innerHTML='<div class="se-text-paragraph" contenteditable="true"></div>';
+  body.appendChild(text); text.firstChild.focus(); input.value='';
+}
+</script>
+</body></html>

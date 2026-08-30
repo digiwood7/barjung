@@ -378,3 +378,40 @@ Vercel은 고객 계정에서 최신 CLI로 로그인·연결하고, `vercel env
 - 매물 수정 화면에서 네이버·인스타그램·당근·직방 원고를 각각 편집해 `copies`에 저장한다.
 - 사진 Storage 객체와 `property_media` 메타데이터를 재실행 가능한 upsert로 저장한다.
 - 고객 Windows의 `setup-windows.ps1`은 Vercel CLI를 항상 `vercel@latest`로 설치·갱신한다.
+
+## 22. 변경 기록 — 2026-08-30 네이버 블로그 어댑터 이식 (Claude 작업, Codex 대조용)
+
+대표 지시: DGagent 의 네이버 블로그 Playwright 코드에서 **작성 부분만** 이식. 황금 키워드·글감·상위글 검색은 제외. 계정 로그인 → 대표가 올린 사진 순서대로 업로드 → 기존 글 스타일로 간략한 글 → 끝에 공인중개사 명시사항.
+
+### 22.1 출처와 범위
+
+- 출처: `DGagent/tools/skill-naver-blog-write/scripts/_browser.py`, `_naver_editor.py`, `publish_draft.py`(파이썬·patchright). 러너가 TypeScript Playwright 1.62 이므로 같은 셀렉터·순서·함정 대응을 TS 로 옮겼다.
+- 옮긴 것: 영구 프로필 크롬, 로그인 3단계 검증, iframe#mainFrame 스코프, 로그인 만료 즉시 판별, '이어서 작성' 팝업, 단어 단위 사람형 타이핑(속도 올리지 않음), '사진' 버튼 파일 선택기 업로드·캡션, 문서 끝 커서 이동, 해시태그 Space 확정, 임시저장, 발행 레이어 접두어 셀렉터, 카테고리 nbsp 정규화, 카테고리 실패 시 발행 금지, RSS 로 발행 URL 확인.
+- 뺀 것: 글감·검색광고·상위글 분석·Gemini 작성, 소제목 인용구/글자색/불릿/표 서식, 동영상 첨부, 텔레그램 알림, 하루 상한 상태 파일.
+- 고친 것: 목록 기호 제거 정규식이 `\d+` 라 "2020. 11. 06." 같은 날짜 줄의 연도를 지우던 것을 1~2자리 번호만 목록으로 보게 수정. 맥 단축키(Meta)를 윈도우(Control)로 분기.
+
+### 22.2 파일
+
+| 구분 | 파일 | 내용 |
+|---|---|---|
+| 신규 | `runner/src/adapters/naver/browser.ts` | 프로필 브라우저·락 정리·로그인 검증 |
+| 신규 | `runner/src/adapters/naver/editor.ts` | `NaverEditor` (SmartEditor 조작) |
+| 신규 | `runner/src/adapters/naver/compose.ts` | 고정 템플릿 글 조립(런타임 AI 없음) |
+| 신규 | `runner/src/adapters/naver/adapter.ts` | `NaverBlogAdapter`, 환경변수 설정, RSS URL 확인 |
+| 신규 | `runner/src/naver-login.ts` | 최초 로그인 CLI (`npm --prefix runner run naver:login`) |
+| 수정 | `runner/src/adapters/naver.ts`, `index.ts` | `BARJUNG_NAVER_ENABLED=true` 일 때만 실제 어댑터, 아니면 기존 `NotConfiguredAdapter` |
+| 수정 | `runner/src/types.ts` | `PublishInput` 에 템플릿용 부가 정보(원고·고지 분리, 매물번호, 유형, 지역, 금액, 사업장명) — 기존 `copy` 유지 |
+| 수정 | `runner/src/store.ts` | 매물·사업장 열을 더 읽어 위 정보를 채움 |
+| 신규 | `runner/tests/naver-compose.test.ts`, `naver-editor.test.ts`, `tests/fixtures/naver-*.html` | 템플릿 순서·해시태그·하위호환, SmartEditor 모형 위 실제 Chromium 조작(팝업→제목→본문→사진 2장 순서→해시태그→카테고리 nbsp→발행), 임시저장/발행 모드, 환경변수 게이트 |
+| 수정 | `.env.example`, `README.md`, `docs/PLATFORM_ADAPTER_GUIDE.md` | 네이버 변수·연결 순서 |
+
+### 22.3 동작
+
+- 기본 `BARJUNG_NAVER_MODE=draft`: 본문·사진·해시태그까지 넣고 **임시저장**. target 은 `not_configured` + `draft_saved` 로 보고돼 화면에 "임시저장 완료" 문구가 뜬다(발행은 사람이 '저장된 글' 에서).
+- `publish`: 발행 레이어 → 카테고리(설정 시) → 확정 → RSS 최상단 글 제목이 같으면 그 링크를 `published_url` 로 저장.
+- 로그인 만료 → `NaverLoginRequired` → `auth_expired` 로 분류.
+
+### 22.4 검증·미검증
+
+- 러너 `npm test` 13/13(모형 SmartEditor 실측 포함), typecheck 통과.
+- **미검증**: 실제 네이버 에디터 DOM 대상 실행. 셀렉터는 DGagent 에서 2026-08-25 까지 라이브로 쓰던 값이지만, 이 저장소에서는 고객 PC headed 검증이 필요하다(가이드 3단계). 특히 사진 뒤 원고가 사진 아래 새 단락으로 들어가는지 확인.

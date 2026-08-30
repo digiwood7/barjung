@@ -110,7 +110,17 @@ python\.venv\Scripts\python.exe -m barjung_media.cli "C:\매물사진\*.jpg" `
 2. 누르면 `distribution_jobs` 1건과 플랫폼별 `distribution_targets` 4건이 `queued` 로 생성됩니다(같은 매물을 1분 안에 다시 요청하면 거부).
 3. Windows 실행기가 큐를 가져가 어댑터를 실행하고 결과(`succeeded`/`failed`/`not_configured`, 게시 URL, 오류 요약)를 기록합니다. 화면은 2초마다 결과를 읽어 보여 줍니다.
 4. 실패·미연결 플랫폼은 "다시 확인" 으로 그 플랫폼만 재요청할 수 있습니다.
-5. 지금은 네 어댑터가 모두 `not_configured` 를 돌려주므로 실제 게시는 되지 않습니다. 현장 연결 순서는 [플랫폼 어댑터 가이드](docs/PLATFORM_ADAPTER_GUIDE.md)를 따릅니다.
+5. 네이버 블로그 어댑터는 이식돼 있고(`BARJUNG_NAVER_ENABLED=true` 로 켬, 기본은 임시저장 모드), 인스타·당근·직방은 아직 `not_configured` 입니다. 현장 연결 순서는 [플랫폼 어댑터 가이드](docs/PLATFORM_ADAPTER_GUIDE.md)를 따릅니다.
+
+## 네이버 블로그 게시
+
+DGagent 의 네이버 블로그 Playwright 코드에서 **글 작성·사진 업로드·발행 부분만** 옮겼습니다(글감·상위글 분석·AI 없음). 기존 바를정 블로그 글 형식대로 인사 → 매물번호·조건 → 대표가 올린 사진 순서대로 → 직원 원고 → 문의 줄 → `* 공인중개사법 시행령에 따른 명시사항 *` → 해시태그 순으로 씁니다.
+
+```powershell
+npm --prefix runner run naver:login      # 최초 1회, '로그인 상태 유지' 체크
+# .env.local: BARJUNG_NAVER_ENABLED=true, BARJUNG_NAVER_MODE=draft (임시저장) → 검증 후 publish
+.\scripts\start-local.ps1 -WithRunner
+```
 
 ## 테스트
 

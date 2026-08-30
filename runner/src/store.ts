@@ -10,9 +10,18 @@ export interface ClaimedTarget {
   content_draft_id?: string | null;
 }
 
-type JobRow = { property_id: string };
-type PropertyRow = { id: string; title: string };
+type JobRow = { property_id: string; office_id: string };
+type PropertyRow = { id: string; title: string; property_number: string; property_kind: "one_room" | "two_room" | "officetel"; public_address: string; deposit_won: number; monthly_rent_won: number; maintenance_fee_won: number };
 type DraftRow = { employee_copy: string; legal_block: string };
+type OfficeRow = { name: string };
+
+const kindLabel: Record<PropertyRow["property_kind"], string> = { one_room: "원룸", two_room: "투룸", officetel: "오피스텔" };
+
+/** "대구광역시 북구 산격동" → "산격동" (동·읍·면·가·리 로 끝나는 마지막 토큰) */
+export function areaLabel(publicAddress: string): string {
+  const tokens = (publicAddress || "").trim().split(/\s+/).filter(Boolean);
+  return [...tokens].reverse().find((token) => /(동|읍|면|가|리)$/.test(token)) ?? tokens[tokens.length - 1] ?? "";
+}
 type MediaRow = { storage_path: string; sort_order: number };
 
 function assertRecord<T>(value: T | null, label: string): T {
@@ -32,16 +41,17 @@ export class SupabaseRunnerStore {
   ) {}
 
   async loadPublishInput(target: ClaimedTarget): Promise<PublishInput> {
-    const { data: job, error: jobError } = await this.client.from("distribution_jobs").select("property_id").eq("id", target.distribution_job_id).single<JobRow>();
+    const { data: job, error: jobError } = await this.client.from("distribution_jobs").select("property_id,office_id").eq("id", target.distribution_job_id).single<JobRow>();
     if (jobError) throw new Error(`배포 작업 조회 실패: ${jobError.code}`);
     const propertyId = assertRecord(job, "배포 작업").property_id;
 
-    const [{ data: property, error: propertyError }, draftResult, { data: media, error: mediaError }] = await Promise.all([
-      this.client.from("properties").select("id,title").eq("id", propertyId).single<PropertyRow>(),
+    const [{ data: property, error: propertyError }, draftResult, { data: media, error: mediaError }, { data: office }] = await Promise.all([
+      this.client.from("properties").select("id,title,property_number,property_kind,public_address,deposit_won,monthly_rent_won,maintenance_fee_won").eq("id", propertyId).single<PropertyRow>(),
       target.content_draft_id
         ? this.client.from("content_drafts").select("employee_copy,legal_block").eq("id", target.content_draft_id).single<DraftRow>()
         : this.client.from("content_drafts").select("employee_copy,legal_block").eq("property_id", propertyId).eq("platform", target.platform).order("version", { ascending: false }).limit(1).maybeSingle<DraftRow>(),
       this.client.from("property_media").select("storage_path,sort_order").eq("property_id", propertyId).order("sort_order", { ascending: true }).returns<MediaRow[]>(),
+      this.client.from("offices").select("name").eq("id", job!.office_id).maybeSingle<OfficeRow>(),
     ]);
     if (propertyError) throw new Error(`매물 조회 실패: ${propertyError.code}`);
     if (draftResult.error) throw new Error(`게시 원고 조회 실패: ${draftResult.error.code}`);
@@ -50,12 +60,22 @@ export class SupabaseRunnerStore {
     const propertyRow = assertRecord(property, "매물");
     const imagePaths = await this.downloadMedia(target.id, media || []);
 
+    const man = (won: number) => Math.round((Number(won) || 0) / 10000);
     return {
       targetId: target.id,
       platform: target.platform,
       title: propertyRow.title,
       copy: `${draft.employee_copy.trim()}\n\n${draft.legal_block.trim()}`,
       imagePaths,
+      employeeCopy: draft.employee_copy.trim(),
+      legalBlock: draft.legal_block.trim(),
+      propertyNumber: propertyRow.property_number,
+      kind: kindLabel[propertyRow.property_kind] ?? "매물",
+      area: areaLabel(propertyRow.public_address),
+      deposit: man(propertyRow.deposit_won),
+      rent: man(propertyRow.monthly_rent_won),
+      maintenance: man(propertyRow.maintenance_fee_won),
+      officeName: office?.name,
     };
   }
 

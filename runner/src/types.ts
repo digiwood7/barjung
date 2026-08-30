@@ -5,8 +5,22 @@ export interface PublishInput {
   targetId: string;
   platform: Platform;
   title: string;
+  /** 직원 원고 + 법정 고지 블록을 합친 전체 본문 (하위호환) */
   copy: string;
   imagePaths: string[];
+  /** 아래는 플랫폼 템플릿용 부가 정보 (없으면 copy 만으로 게시) */
+  employeeCopy?: string;
+  legalBlock?: string;
+  propertyNumber?: string;
+  /** 원룸·투룸·오피스텔 */
+  kind?: string;
+  /** 동 단위 지역 라벨 (예: 산격동) */
+  area?: string;
+  /** 만원 단위 */
+  deposit?: number;
+  rent?: number;
+  maintenance?: number;
+  officeName?: string;
 }
 
 export interface PublishResult {

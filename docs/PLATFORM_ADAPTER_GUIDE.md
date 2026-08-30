@@ -9,9 +9,32 @@
 - 게시 직전과 직후의 상태를 확인해 중복 게시를 막는다.
 - 프로필 폴더, 쿠키와 세션은 저장소에 커밋하지 않는다.
 
+## 네이버 블로그 (2026-08-30 이식 완료 — 고객 PC headed 검증 대기)
+
+DGagent `tools/skill-naver-blog-write/scripts/{_browser,_naver_editor}.py` 의 **글 작성·업로드·발행 부분만** TypeScript 로 옮겼다(`runner/src/adapters/naver/`). 글감 발굴·상위글 분석·AI 작성·서식 꾸미기는 뺐다.
+
+| 파일 | 역할 |
+|---|---|
+| `naver/browser.ts` | 영구 프로필 크롬(채널 chrome → 내장 Chromium 폴백), 락 파일 정리, 로그인 3단계 검증(NID_AUT+NID_SES · 영구 쿠키 · 글쓰기 페이지 진입) |
+| `naver/editor.ts` | SmartEditor 조작: iframe#mainFrame 스코프, 로그인 만료 즉시 판별, '이어서 작성' 팝업, 단어 단위 사람형 타이핑, '사진' 버튼→파일 선택기 업로드(순서 보장)·캡션, 해시태그(Space 로 칩 확정), 임시저장, 발행 레이어(`[class*='publish_btn']` 등 접두어 매칭)·카테고리(nbsp 정규화)·확정 |
+| `naver/compose.ts` | 기존 블로그 글 형식 고정 템플릿: 인사 → 매물번호·보증금·월차임·관리비 → 사진 순서대로 → 직원 원고 → 문의 줄 → `* 공인중개사법 시행령에 따른 명시사항 *` → 해시태그 |
+| `naver/adapter.ts` | `PlatformAdapter` 구현. 기본 **임시저장 모드**(`not_configured`/`draft_saved` 로 보고), `BARJUNG_NAVER_MODE=publish` 면 발행 후 RSS 최상단 글로 URL 확인 |
+| `src/naver-login.ts` | 최초 1회 로그인 저장 (`npm --prefix runner run naver:login`) |
+
+### 고객 PC 연결 순서
+
+1. `.env.local` 에 `BARJUNG_PLAYWRIGHT_PROFILE_DIR`(저장소 밖 폴더), `BARJUNG_NAVER_CONTACT`, `BARJUNG_NAVER_HASHTAGS`, `BARJUNG_NAVER_BLOG_ID` 를 넣는다.
+2. `npm --prefix runner run naver:login` → 크롬 창에서 **'로그인 상태 유지' 체크** 후 로그인(2단계 인증까지). `LOGIN_OK` 가 찍혀야 한다.
+3. `BARJUNG_NAVER_ENABLED=true`, `BARJUNG_NAVER_MODE=draft`, `BARJUNG_HEADLESS=false` 로 실행기를 켜고 매물 하나를 배포한다. 브라우저 창에서 제목·사진 순서·원고·명시사항·해시태그가 들어가는지 눈으로 확인하고, 네이버 '저장된 글' 에서 결과를 본다.
+   - 확인 포인트: 사진 뒤 원고가 사진 **아래** 새 단락에 들어가는지(에디터가 이미지 뒤에 새 문단을 만들어 준다는 전제). 위로 새면 `adapter.ts` 의 `caretToDocumentEnd` 호출 순서를 조정한다.
+4. 문제없으면 `BARJUNG_NAVER_CATEGORY` 를 정하고 `BARJUNG_NAVER_MODE=publish` 로 바꾼다. 카테고리를 못 고르면 발행하지 않는다.
+5. 안정화 뒤 `BARJUNG_HEADLESS=true`.
+
+로그인이 만료되면 target 이 `auth_expired` 로 실패한다 → 2번을 다시 한다(2단계 인증이라 자동 복구 없음).
+
 ## 연결 순서
 
-1. `runner/src/adapters/naver.ts`
+1. `runner/src/adapters/naver.ts` — 위 절 참고
 2. `runner/src/adapters/instagram.ts`
 3. `runner/src/adapters/daangn.ts`
 4. `runner/src/adapters/zigbang.ts`
