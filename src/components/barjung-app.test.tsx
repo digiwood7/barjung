@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createApiRepository } from "@/lib/api/client";
+import { createApiRepository, createDefaultDemoRepository } from "@/lib/api/client";
 import type { WorkspaceSnapshot } from "@/lib/domain/types";
 import { defaultSettings } from "@/lib/domain/types";
 import { BarjungApp } from "./barjung-app";
@@ -8,7 +8,7 @@ import { BarjungApp } from "./barjung-app";
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 async function openApp() {
-  render(<BarjungApp />);
+  render(<BarjungApp repository={createDefaultDemoRepository()} />);
   await screen.findByRole("button", { name: "고객관리" });
 }
 

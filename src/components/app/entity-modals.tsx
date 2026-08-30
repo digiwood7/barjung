@@ -2,8 +2,10 @@
 
 import { Check, X } from "lucide-react";
 import { useState } from "react";
+import { PLATFORMS } from "@/lib/domain/types";
 import type { Customer, Employee, Property, WorkspaceMode } from "@/lib/domain/types";
 import { toKstInputValue } from "@/lib/supabase/mappers";
+import { platformName } from "./ui";
 
 export type NewEntityValues = { name: string; phone: string; detail: string; note: string };
 
@@ -99,7 +101,16 @@ export function EditPropertyModal({ property, employees, busy, error, onClose, o
         <label>관리비 (만원)<input type="number" value={draft.maintenance} onChange={(event) => change("maintenance", Number(event.target.value))} /></label>
         <label>방향 (법정 고지)<input value={draft.disclosure.direction} placeholder="예: 남동향 (주실 창 기준)" onChange={(event) => change("disclosure", { ...draft.disclosure, direction: event.target.value })} /></label>
         <label>계약면적 (법정 고지)<input value={draft.disclosure.contractArea} placeholder="예: 26.42㎡" onChange={(event) => change("disclosure", { ...draft.disclosure, contractArea: event.target.value })} /></label>
-        <label>플랫폼 원고<textarea value={draft.employeeCopy || ""} onChange={(event) => change("employeeCopy", event.target.value)} /></label>
+        {PLATFORMS.map((platform) => (
+          <label key={platform}>{platformName[platform]} 원고<textarea value={draft.copies?.[platform] ?? ""} onChange={(event) => {
+            const value = event.target.value;
+            setDraft((current) => ({
+              ...current,
+              employeeCopy: platform === "naver" ? value : current.employeeCopy,
+              copies: { ...(current.copies ?? {}), [platform]: value },
+            }));
+          }} /></label>
+        ))}
       </div>
       <div className="modal-actions split-actions"><button className="danger-button" onClick={onDelete} disabled={busy}>매물 삭제</button><span className="form-error">{error}</span><button className="secondary" onClick={onClose}>취소</button><button className="primary" disabled={busy || !draft.title.trim() || !draft.exactAddress.trim()} onClick={() => onSave(draft)}><Check size={15} /> {busy ? "저장 중" : "변경사항 저장"}</button></div>
     </div></div>

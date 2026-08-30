@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isRemoteAdminRuntime, remoteAccessDisabled } from "@/lib/api/server";
 import { lookupBuildingRegisterByAddress } from "@/lib/building-register/client";
 import type { AddressLookupInput } from "@/lib/building-register/types";
 
@@ -6,6 +7,7 @@ export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
+    if (isRemoteAdminRuntime()) return remoteAccessDisabled();
     const input = await request.json() as AddressLookupInput;
     const apiKey = process.env.BUILDING_REGISTER_API_KEY?.trim() || "";
     const jusoApiKey = process.env.JUSO_API_KEY?.trim() || "";

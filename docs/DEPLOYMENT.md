@@ -10,21 +10,15 @@
 
 service role key는 고객 PC 의 로컬 관리자 서버·runner·Python 업로더와 서버 전용 환경에만 저장합니다. 브라우저에는 publishable key만 사용합니다.
 
-## Vercel (조회 전용)
+## Vercel (관리자 인증 도입 전 차단)
 
-관리자 로그인이 확정되기 전에는 Vercel 배포를 조회 용도로만 씁니다.
+현재 버전은 Vercel 런타임(`VERCEL=1`)에서 관리자 API와 공공데이터 API를 읽기·쓰기 모두 403으로 차단합니다. 고객·직원 전화번호와 매물 정확 주소를 보호하기 위해 인증 도입 전에는 고객 실데이터를 원격으로 제공하지 않습니다.
 
-1. `npm install -g vercel@latest`로 CLI를 갱신한다.
-2. 고객 Vercel 계정으로 로그인한다.
-3. 고객 GitHub 저장소와 새 Vercel 프로젝트를 연결한다.
-4. 환경변수를 넣는다.
-   - `SUPABASE_URL` — 고객 프로젝트 URL
-   - `SUPABASE_SERVICE_ROLE_KEY` — **sensitive 로** (서버 전용, 브라우저에 노출되지 않음)
-   - `BARJUNG_READ_ONLY=true` — 저장 요청을 403 으로 막는다
-   - `JUSO_API_KEY`, `BUILDING_REGISTER_API_KEY` — 서버 전용(선택)
-   - `SUPABASE_URL`/`SERVICE_ROLE_KEY` 를 넣지 않으면 Vercel 화면은 데모 모드로 뜬다.
-5. Preview에서 모바일·데스크톱 조회와 "조회 전용" 배지, 저장 시 403 메시지를 검증한다.
-6. 관리자 인증이 확정된 뒤 `BARJUNG_READ_ONLY` 를 내리고 Production 쓰기를 활성화한다.
-7. `vercel deploy --prod`로 정식 배포한다.
+1. 고객 PC의 `setup-windows.ps1`을 실행하거나 `npm install -g vercel@latest`로 CLI를 최신판으로 맞춘다.
+2. 이 단계에서는 Vercel 프로젝트에 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `JUSO_API_KEY`, `BUILDING_REGISTER_API_KEY`를 넣지 않는다.
+3. 고객 실데이터 운영은 Windows PC의 `localhost`에서만 수행한다.
+4. 관리자 인증 방식과 직원별 권한을 확정한다.
+5. 인증·권한 검사를 모든 `/api/*` 데이터 경계에 적용하고 보안 테스트를 통과한 뒤에만 고객 Vercel 계정으로 Preview를 배포한다.
+6. Preview에서 비로그인 401/403, 다른 사업장 접근 차단, 읽기·쓰기 권한을 검증한 뒤 Production으로 승격한다.
 
 현재 개발 PC의 `.vercel` 연결정보를 고객 PC로 복사하지 않습니다.

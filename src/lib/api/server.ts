@@ -5,12 +5,24 @@ import { resolveOfficeId, type WorkspaceContext } from "@/lib/supabase/workspace
 /**
  * Route Handler 공통 진입점.
  * - 고객 Supabase 값이 없으면 503 NOT_CONFIGURED (화면은 demo 모드로 동작)
- * - BARJUNG_READ_ONLY=true 이면 조회만 허용 (Vercel 조회 전용 배포용)
+ * - Vercel 런타임은 관리자 인증 도입 전 읽기·쓰기 모두 차단
+ * - BARJUNG_READ_ONLY=true 이면 로컬에서도 조회만 허용
  * - 서비스 오류는 400 + 정제된 메시지
  */
 export type LiveHandler<T> = (ctx: WorkspaceContext, request: Request) => Promise<T>;
 
 let officeCache: { key: string; id: string } | null = null;
+
+export function isRemoteAdminRuntime(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.VERCEL === "1";
+}
+
+export function remoteAccessDisabled(): NextResponse {
+  return NextResponse.json({
+    code: "REMOTE_ACCESS_DISABLED",
+    message: "관리자 인증이 도입되기 전에는 Vercel에서 고객 데이터에 접근할 수 없습니다. 고객 Windows PC의 로컬 관리자에서 사용하세요.",
+  }, { status: 403 });
+}
 
 export async function liveContext(): Promise<WorkspaceContext | null> {
   const client = createServiceClient();
@@ -26,8 +38,9 @@ export function notConfigured(): NextResponse {
 
 export async function withLive<T>(request: Request, handler: LiveHandler<T>): Promise<NextResponse> {
   try {
+    if (isRemoteAdminRuntime()) return remoteAccessDisabled();
     if (request.method !== "GET" && isReadOnly()) {
-      return NextResponse.json({ code: "READ_ONLY", message: "조회 전용 배포에서는 저장할 수 없습니다. 고객 Windows PC의 로컬 관리자에서 작업하세요." }, { status: 403 });
+      return NextResponse.json({ code: "READ_ONLY", message: "현재 조회 전용 모드에서는 저장할 수 없습니다." }, { status: 403 });
     }
     const ctx = await liveContext();
     if (!ctx) return notConfigured();

@@ -109,8 +109,11 @@ export async function loadWorkspace(ctx: WorkspaceContext, readOnly: boolean): P
 export async function nextPropertyNumber(ctx: WorkspaceContext): Promise<string> {
   const prefix = kstDateStamp(nowOf(ctx));
   const existing = await rows<{ property_number: string }>("매물번호 조회", ctx.client.from("properties").select("property_number").eq("office_id", ctx.officeId));
-  const used = existing.filter((row) => row.property_number.startsWith(`${prefix}-`)).length;
-  return `${prefix}-${String(used + 1).padStart(2, "0")}`;
+  const latest = existing.reduce((max, row) => {
+    const match = row.property_number.match(new RegExp(`^${prefix}-(\\d+)$`));
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0);
+  return `${prefix}-${String(latest + 1).padStart(2, "0")}`;
 }
 
 async function resolveEmployeeId(ctx: WorkspaceContext, input: { registeredById?: string | null; registeredBy?: string }): Promise<string | null> {

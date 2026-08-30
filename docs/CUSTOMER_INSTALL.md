@@ -8,14 +8,14 @@
 - Python 3.13 이상
 - Supabase CLI 최신 안정판
 - Chromium for Playwright
-- (선택) Vercel CLI 최신판 — 고객 Vercel 배포 때만
+- Vercel CLI 최신판 — `setup-windows.ps1`이 `vercel@latest`로 설치·갱신
 
 ## 설치 순서
 
 1. README의 `winget` 명령으로 Git, Node.js와 Python을 설치한다. `python --version` 이 스토어를 열면 앱 실행 별칭에서 `python.exe` 를 끈다.
 2. Supabase 공식 문서대로 CLI를 설치한다(scoop 권장).
 3. 저장소를 고객 PC의 원하는 작업 폴더에 클론한다.
-4. `Set-ExecutionPolicy -Scope Process Bypass` 후 `setup-windows.ps1` 로 선행 프로그램을 점검하고 `bootstrap-windows.ps1` 로 프로젝트 의존성을 설치한다.
+4. `Set-ExecutionPolicy -Scope Process Bypass` 후 `setup-windows.ps1` 로 선행 프로그램을 점검하고 Vercel CLI를 최신판으로 설치·갱신한 다음, `bootstrap-windows.ps1` 로 프로젝트 의존성을 설치한다.
 5. `start-local.ps1` 로 **데모 모드** 화면을 확인한다(상단 노란 배지 "데모 데이터").
 6. 고객 Supabase 프로젝트를 만들고 `migrate-supabase.ps1 -ProjectRef <REF>` 로 migration + seed 를 적용한다.
 7. `.env.local` 에 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` 를 입력한다.
@@ -42,6 +42,7 @@ Invoke-RestMethod http://localhost:3000/api/workspace | Select-Object mode, read
 - Playwright 로그인 profile은 고객이 `BARJUNG_PLAYWRIGHT_PROFILE_DIR`로 지정한 저장소 밖 폴더를 사용한다.
 - 환경파일, profile, 원본 사진, 최적화 임시폴더는 Git에 포함하지 않는다.
 - `SUPABASE_SERVICE_ROLE_KEY` 는 고객 PC 의 로컬 관리자 서버·실행기·Python 업로더만 사용하고 브라우저·Git 에 넣지 않는다.
+- 관리자 인증 전에는 Vercel에 고객 Supabase·공공데이터 키를 넣지 않는다. Vercel의 관리자 API는 코드에서도 403으로 차단된다.
 
 ## 로컬 사진 최적화 예시
 

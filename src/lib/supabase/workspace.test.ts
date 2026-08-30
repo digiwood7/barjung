@@ -59,6 +59,17 @@ describe("workspace 데이터 서비스 (가짜 Supabase)", () => {
     expect(await nextPropertyNumber(ctx)).toBe("260830-02");
   });
 
+  it("당일 중간 번호를 삭제해도 이미 사용한 번호보다 큰 다음 번호를 만든다", async () => {
+    const seed = demoProperties[0];
+    const first = await createProperty(ctx, { ...seed, number: "260830-01" });
+    const second = await createProperty(ctx, { ...seed, number: "260830-02" });
+    await createProperty(ctx, { ...seed, number: "260830-03" });
+    await deleteProperty(ctx, second.id);
+
+    expect(first.number).toBe("260830-01");
+    expect(await nextPropertyNumber(ctx)).toBe("260830-04");
+  });
+
   it("고지가 비면 invalid 로 저장하고 배포 요청을 막는다", async () => {
     const created = await createProperty(ctx, { ...demoProperties[3], number: "" });
     expect(db.rows("legal_disclosures")[0].validation_status).toBe("invalid");

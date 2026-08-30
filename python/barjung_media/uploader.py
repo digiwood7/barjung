@@ -19,7 +19,7 @@ def upload_file(supabase_url: str, service_role_key: str, bucket: str, object_pa
         "Authorization": f"Bearer {service_role_key}",
         "apikey": service_role_key,
         "Content-Type": "image/jpeg",
-        "x-upsert": "false",
+        "x-upsert": "true",
     })
     with urlopen(request, timeout=60) as response:
         if not 200 <= response.status < 300:
@@ -49,11 +49,11 @@ def insert_media_record(
         "mime_type": manifest_item["mime_type"],
         "checksum_sha256": manifest_item["checksum_sha256"],
     }).encode("utf-8")
-    request = Request(f"{supabase_url.rstrip('/')}/rest/v1/property_media", data=body, method="POST", headers={
+    request = Request(f"{supabase_url.rstrip('/')}/rest/v1/property_media?on_conflict=storage_path", data=body, method="POST", headers={
         "Authorization": f"Bearer {service_role_key}",
         "apikey": service_role_key,
         "Content-Type": "application/json",
-        "Prefer": "return=minimal",
+        "Prefer": "resolution=merge-duplicates,return=minimal",
     })
     with urlopen(request, timeout=30) as response:
         if not 200 <= response.status < 300:

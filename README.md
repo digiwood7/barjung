@@ -9,7 +9,7 @@
 | **데모** | `.env.local` 에 Supabase 값이 없음 | 브라우저 메모리 (새로고침하면 사라짐) | 상단 노란 배지 "데모 데이터" |
 | **고객 DB 연결** | `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` 있음 | 고객 Supabase (매물·고객·직원·법정 고지·원고·배포 작업) | 상단 초록 배지 "고객 DB 연결" |
 
-고객 DB 연결 모드에서는 브라우저가 Supabase 에 직접 붙지 않고, 고객 PC 의 로컬 Next 서버(`/api/*`)가 서버 전용 키로 Supabase 를 읽고 씁니다. 관리자 로그인 방식이 확정되기 전이라도 고객 계정만 연결하면 바로 사용할 수 있고, 로그인이 도입되면 이 API 계층을 그대로 두고 인증만 붙이면 됩니다.
+고객 DB 연결 모드에서는 브라우저가 Supabase 에 직접 붙지 않고, 고객 PC 의 로컬 Next 서버(`/api/*`)가 서버 전용 키로 Supabase 를 읽고 씁니다. 관리자 로그인 방식이 확정되기 전에는 `VERCEL=1` 환경의 모든 관리자 API를 403으로 차단하므로 고객 실데이터는 Windows PC의 `localhost`에서만 사용할 수 있습니다.
 
 네이버·인스타그램·당근·직방의 실제 게시 단계는 아직 빈 어댑터(`not_configured`)이며, 고객 Windows PC에서 headed Playwright 로 하나씩 연결합니다.
 
@@ -23,7 +23,7 @@ winget install --id OpenJS.NodeJS.LTS --exact
 winget install --id Python.Python.3.13 --exact
 ```
 
-Supabase CLI는 [공식 CLI 설치 문서](https://supabase.com/docs/guides/local-development/cli/getting-started)를 따라 설치합니다(Windows 는 scoop 방식이 가장 간단합니다). Vercel CLI 는 고객 Vercel 에 배포할 때만 필요하며 로컬 설치에는 필요 없습니다. Docker Desktop 은 로컬 Supabase 스택을 띄워 DB 테스트를 할 때만 필요하고, 고객 원격 프로젝트에 `db push` 만 할 때는 필요 없습니다.
+Supabase CLI는 [공식 CLI 설치 문서](https://supabase.com/docs/guides/local-development/cli/getting-started)를 따라 설치합니다(Windows 는 scoop 방식이 가장 간단합니다). `setup-windows.ps1`은 나중의 고객 Vercel 배포를 위해 Vercel CLI를 `vercel@latest`로 설치하거나 갱신합니다. Docker Desktop 은 로컬 Supabase 스택을 띄워 DB 테스트를 할 때만 필요하고, 고객 원격 프로젝트에 `db push` 만 할 때는 필요 없습니다.
 
 새 PowerShell을 열고 버전을 확인합니다.
 
@@ -47,7 +47,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\bootstrap-windows.ps1
 ```
 
-`bootstrap-windows.ps1`은 이 프로젝트 안의 Node 패키지, `python\.venv`, Python 고정 의존성과 Playwright Chromium만 준비합니다. 고객이 명시적으로 실행하기 전에는 전역 Claude·Codex 설정이나 다른 프로젝트를 변경하지 않습니다. `scripts\*.ps1` 은 UTF-8 BOM 으로 저장돼 있어 윈도우 기본 PowerShell 5.1 에서도 한글 안내가 깨지지 않습니다.
+`setup-windows.ps1`은 선행 프로그램을 확인하고 Vercel CLI 최신판을 전역 설치·갱신합니다. `bootstrap-windows.ps1`은 이 프로젝트 안의 Node 패키지, `python\.venv`, Python 고정 의존성과 Playwright Chromium만 준비합니다. 전역 Claude·Codex 설정이나 다른 프로젝트는 변경하지 않습니다. `scripts\*.ps1` 은 UTF-8 BOM 으로 저장돼 있어 윈도우 기본 PowerShell 5.1 에서도 한글 안내가 깨지지 않습니다.
 
 로컬 관리자 화면을 엽니다.
 
@@ -133,9 +133,9 @@ supabase db lint --level error
 supabase db advisors
 ```
 
-## Vercel 배포 (조회 전용)
+## Vercel 배포
 
-관리자 로그인이 확정되기 전에는 Vercel 배포를 조회 용도로만 씁니다. 서버 전용 환경변수 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`(sensitive) 와 `BARJUNG_READ_ONLY=true` 를 넣으면 화면은 고객 DB 를 읽되 저장 요청은 403 으로 막힙니다. service role key 는 브라우저용 `NEXT_PUBLIC_` 변수에 절대 넣지 않습니다. 상세 절차는 [배포 가이드](docs/DEPLOYMENT.md)를 확인합니다.
+관리자 인증이 확정되기 전에는 Vercel에 고객 Supabase·공공데이터 키를 넣지 않습니다. Vercel 런타임의 관리자 API는 읽기와 쓰기 모두 403으로 차단되어 고객 개인정보가 공개되지 않습니다. 현재 고객 실데이터 운영은 Windows PC의 `localhost`만 사용하고, 인증 도입 후 Vercel 배포를 다시 엽니다. 상세 절차는 [배포 가이드](docs/DEPLOYMENT.md)를 확인합니다.
 
 ## 문서
 

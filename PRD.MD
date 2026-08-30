@@ -61,7 +61,7 @@
 ### Windows PC 우선
 
 - 매물 등록, 사진 최적화, 공공데이터 조회와 게시 작업은 고객 Windows PC에서 수행한다.
-- 모바일과 Vercel 배포 화면은 우선 조회 기능으로 제공한다.
+- 모바일은 우선 조회 기능으로 제공하고, Vercel 고객 실데이터 접근은 관리자 인증 도입 전 차단한다.
 - 로그인 세션은 고객 PC의 전용 Playwright 프로필에만 저장한다.
 - 개발은 headed로 하고 안정화 후 headless로 전환한다.
 
@@ -95,7 +95,7 @@ flowchart TD
     E --> K[당근]
     E --> L[직방]
     E --> H
-    M[Vercel 조회 UI] --> H
+    M[Vercel API 차단<br/>인증 도입 전] --> H
 ```
 
 ### Next.js 관리자
@@ -242,7 +242,7 @@ AI는 고지값을 만들거나 추측하지 않으며 고지 블록은 사용�
 - `user_metadata`를 권한 판단에 사용하지 않음
 - service role과 공공데이터 키를 브라우저에 노출하지 않음 — service role 은 고객 PC 로컬 Next 서버(Route Handler)와 Windows 실행기, Python 업로더만 사용
 - Storage는 private, 로그인 프로필은 고객 PC 저장소 밖 경로
-- 인증 확정 전 Vercel 실제 쓰기 기능 비활성화
+- 인증 확정 전 Vercel 관리자 API와 공공데이터 API의 읽기·쓰기 전체 차단
 
 ## 15. 오류와 복구
 
@@ -322,7 +322,7 @@ Vercel은 고객 계정에서 최신 CLI로 로그인·연결하고, `vercel env
 - RLS 정책이 `authenticated` + `app_metadata.office_id` 를 요구하는데 관리자 로그인은 20절 미결정 항목이라 브라우저가 Supabase 에 직접 붙을 수 없다.
 - 따라서 **고객 PC 의 로컬 Next 서버가 서버 전용 키(`SUPABASE_SERVICE_ROLE_KEY`)로 Supabase 에 접근**하고, 브라우저는 `localhost/api/*` 만 호출한다. 키는 `.env.local` 에만 있고 브라우저 번들에 들어가지 않는다.
 - `NEXT_PUBLIC_SUPABASE_*` 는 화면 코드에서 사용하지 않는다(로그인 도입 후 브라우저 직접 접속용으로 이름만 유지).
-- `BARJUNG_READ_ONLY=true` 면 저장 요청을 403 으로 막는다 — 14절 "인증 확정 전 Vercel 실제 쓰기 기능 비활성화" 구현.
+- 당시에는 `BARJUNG_READ_ONLY=true` 로 Vercel 저장 요청만 막았다. 22절 재검증에서 무인증 읽기 노출을 확인해 Vercel API 전체 차단으로 대체했다.
 - 실시간 반영은 Realtime 대신 폴링: 화면 전체 5초, 배포 모달 2초(브라우저에 인증 세션이 없어 Realtime 구독 불가).
 
 ### 21.2 파일별 변경
@@ -369,3 +369,12 @@ Vercel은 고객 계정에서 최신 CLI로 로그인·연결하고, `vercel env
 - 매물 상세의 사진 수는 `property_media` 행 수이며 실제 이미지는 화면에 표시하지 않는다(private 버킷 서명 URL 은 로그인 도입 후).
 - `app_settings.platform_settings.address_policy` 에 플랫폼별 주소 공개 범위를 저장하지만, 게시 시 주소 가공은 어댑터 연결 때 구현한다.
 - 저장소가 비공개라 고객 클론은 공개 전환 또는 초대가 필요하다(대표 처리).
+
+## 22. 변경 기록 — 2026-08-30 Codex 재검증 보완
+
+- 관리자 인증 전 Vercel 런타임의 `/api/*` 고객 데이터 및 공공데이터 호출을 403 `REMOTE_ACCESS_DISABLED` 로 차단했다. 고객 실데이터는 Windows PC의 `localhost`에서만 사용한다.
+- `/api/workspace`의 명시적인 503 `NOT_CONFIGURED`만 데모 모드로 전환한다. DB·서버·네트워크 오류는 오류 화면에 남긴다.
+- 일자별 매물번호는 당일 행 개수가 아니라 사용한 최대 순번 다음 값으로 채번해 중간 삭제 뒤 유일성 충돌을 막는다.
+- 매물 수정 화면에서 네이버·인스타그램·당근·직방 원고를 각각 편집해 `copies`에 저장한다.
+- 사진 Storage 객체와 `property_media` 메타데이터를 재실행 가능한 upsert로 저장한다.
+- 고객 Windows의 `setup-windows.ps1`은 Vercel CLI를 항상 `vercel@latest`로 설치·갱신한다.

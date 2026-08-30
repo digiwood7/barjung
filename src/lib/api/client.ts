@@ -47,11 +47,9 @@ export function createDefaultDemoRepository(): BarjungRepository {
 }
 
 export async function connectRepository(): Promise<BarjungRepository> {
-  try {
-    const response = await fetch("/api/workspace", { cache: "no-store" });
-    if (response.ok) return createApiRepository(await response.json() as WorkspaceSnapshot);
-  } catch {
-    // 서버가 없거나(테스트) 응답이 없으면 demo
-  }
-  return createDefaultDemoRepository();
+  const response = await fetch("/api/workspace", { cache: "no-store" });
+  const payload = await response.json().catch(() => ({})) as WorkspaceSnapshot & { code?: string; message?: string };
+  if (response.ok) return createApiRepository(payload);
+  if (response.status === 503 && payload.code === "NOT_CONFIGURED") return createDefaultDemoRepository();
+  throw new Error(payload.message || `작업 공간 연결 실패 (${response.status})`);
 }
