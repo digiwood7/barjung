@@ -379,18 +379,18 @@ Vercel은 고객 계정에서 최신 CLI로 로그인·연결하고, `vercel env
 - 사진 Storage 객체와 `property_media` 메타데이터를 재실행 가능한 upsert로 저장한다.
 - 고객 Windows의 `setup-windows.ps1`은 Vercel CLI를 항상 `vercel@latest`로 설치·갱신한다.
 
-## 22. 변경 기록 — 2026-08-30 네이버 블로그 어댑터 이식 (Claude 작업, Codex 대조용)
+## 23. 변경 기록 — 2026-08-30 네이버 블로그 어댑터 이식 (Claude 작업, Codex 대조용)
 
 대표 지시: DGagent 의 네이버 블로그 Playwright 코드에서 **작성 부분만** 이식. 황금 키워드·글감·상위글 검색은 제외. 계정 로그인 → 대표가 올린 사진 순서대로 업로드 → 기존 글 스타일로 간략한 글 → 끝에 공인중개사 명시사항.
 
-### 22.1 출처와 범위
+### 23.1 출처와 범위
 
 - 출처: `DGagent/tools/skill-naver-blog-write/scripts/_browser.py`, `_naver_editor.py`, `publish_draft.py`(파이썬·patchright). 러너가 TypeScript Playwright 1.62 이므로 같은 셀렉터·순서·함정 대응을 TS 로 옮겼다.
 - 옮긴 것: 영구 프로필 크롬, 로그인 3단계 검증, iframe#mainFrame 스코프, 로그인 만료 즉시 판별, '이어서 작성' 팝업, 단어 단위 사람형 타이핑(속도 올리지 않음), '사진' 버튼 파일 선택기 업로드·캡션, 문서 끝 커서 이동, 해시태그 Space 확정, 임시저장, 발행 레이어 접두어 셀렉터, 카테고리 nbsp 정규화, 카테고리 실패 시 발행 금지, RSS 로 발행 URL 확인.
 - 뺀 것: 글감·검색광고·상위글 분석·Gemini 작성, 소제목 인용구/글자색/불릿/표 서식, 동영상 첨부, 텔레그램 알림, 하루 상한 상태 파일.
 - 고친 것: 목록 기호 제거 정규식이 `\d+` 라 "2020. 11. 06." 같은 날짜 줄의 연도를 지우던 것을 1~2자리 번호만 목록으로 보게 수정. 맥 단축키(Meta)를 윈도우(Control)로 분기.
 
-### 22.2 파일
+### 23.2 파일
 
 | 구분 | 파일 | 내용 |
 |---|---|---|
@@ -405,13 +405,41 @@ Vercel은 고객 계정에서 최신 CLI로 로그인·연결하고, `vercel env
 | 신규 | `runner/tests/naver-compose.test.ts`, `naver-editor.test.ts`, `tests/fixtures/naver-*.html` | 템플릿 순서·해시태그·하위호환, SmartEditor 모형 위 실제 Chromium 조작(팝업→제목→본문→사진 2장 순서→해시태그→카테고리 nbsp→발행), 임시저장/발행 모드, 환경변수 게이트 |
 | 수정 | `.env.example`, `README.md`, `docs/PLATFORM_ADAPTER_GUIDE.md` | 네이버 변수·연결 순서 |
 
-### 22.3 동작
+### 23.3 동작
 
 - 기본 `BARJUNG_NAVER_MODE=draft`: 본문·사진·해시태그까지 넣고 **임시저장**. target 은 `not_configured` + `draft_saved` 로 보고돼 화면에 "임시저장 완료" 문구가 뜬다(발행은 사람이 '저장된 글' 에서).
 - `publish`: 발행 레이어 → 카테고리(설정 시) → 확정 → RSS 최상단 글 제목이 같으면 그 링크를 `published_url` 로 저장.
 - 로그인 만료 → `NaverLoginRequired` → `auth_expired` 로 분류.
 
-### 22.4 검증·미검증
+### 23.4 검증·미검증
 
 - 러너 `npm test` 13/13(모형 SmartEditor 실측 포함), typecheck 통과.
 - **미검증**: 실제 네이버 에디터 DOM 대상 실행. 셀렉터는 DGagent 에서 2026-08-25 까지 라이브로 쓰던 값이지만, 이 저장소에서는 고객 PC headed 검증이 필요하다(가이드 3단계). 특히 사진 뒤 원고가 사진 아래 새 단락으로 들어가는지 확인.
+
+### 23.5 Codex 재검증 판정 (2026-08-30)
+
+판정은 **기본 이식과 내부 연결은 정상이나 실제 자동 발행 투입 전 운영 결함 보완이 필요함**이다. 이번 검증은 코드와 문서만 확인했으며 네이버 실계정 게시·실제 SmartEditor DOM 조작은 수행하지 않았다. 원본 DGagent는 현재 저장소 밖이므로 원본과 줄 단위 대조하지 않고 이식본의 동작 계약과 배포 경로를 독립 검증했다.
+
+#### 확인 완료
+
+- Supabase `distribution_target` 획득 → 매물·원고·법정 고지·사진 다운로드 → 네이버 템플릿 조립 → `NaverBlogAdapter` 실행 → 결과 저장 경로가 연결돼 있다.
+- `BARJUNG_NAVER_ENABLED=true`일 때만 실제 어댑터가 활성화되며 기본값은 안전한 `NotConfiguredAdapter`다.
+- 사진은 `sort_order` 순으로 내려받아 어댑터 입력 순서를 유지한다.
+- 직원 원고와 법정 고지 블록을 분리하고, 배포 요청 전에 법정 고지 필수값과 플랫폼 원고 누락을 차단한다.
+- 모형 SmartEditor의 실제 Chromium 조작을 포함한 러너 테스트 13/13과 TypeScript typecheck가 통과했다.
+- 검증 기준 커밋은 `9acb9df`이며 당시 `main`과 `origin/main`이 일치했다.
+
+#### 라이브 발행 전 필수 보완 — 현재 미수정
+
+1. **발행 성공 과대 판정**: `runner/src/adapters/naver/adapter.ts`는 발행 버튼을 누른 뒤 RSS에서 URL을 찾지 못하거나 `BARJUNG_NAVER_BLOG_ID`가 비어 있어도 `succeeded`를 반환한다. `published_url`이 확인된 경우에만 성공으로 확정하고, 미확인은 실패 또는 별도 검증 대기 상태로 남겨야 한다.
+2. **120초 lease 만료에 따른 중복 게시 위험**: `runner/src/index.ts`가 작업을 120초로 획득한 뒤 게시 중 lease를 연장하지 않는다. 사진 업로드와 사람형 타이핑이 120초를 넘으면 DB가 같은 target을 다시 `queued`로 회수해 중복 게시할 수 있다. 활성 작업 heartbeat/lease 연장과 게시 전후 중복 확인이 필요하다.
+3. **사진 업로드 완료 미확인**: `runner/src/adapters/naver/editor.ts`는 파일 선택 후 고정 2.5초가 지나면 성공으로 본다. 실제 이미지 컴포넌트 증가, 업로드 진행 표시 종료, 오류 표시와 최종 사진 수를 확인해야 한다.
+4. **브라우저 프로필 잠금 처리 위험**: `runner/src/adapters/naver/browser.ts`는 프로필 잠금 오류가 나면 해당 프로필을 사용 중인 Chrome 프로세스가 살아 있는지 확인하지 않고 잠금 파일을 지운다. 실행 중인 Chrome이면 자동 삭제하지 말고 종료를 요청해 프로필 충돌·손상 위험을 막아야 한다.
+5. **RSS XML 엔티티 미처리**: 현재 RSS 제목 비교는 CDATA와 공백은 처리하지만 `&amp;` 같은 XML 엔티티를 디코딩하지 않는다. 특수문자 제목도 URL을 확인할 수 있도록 XML 파서를 사용하거나 엔티티를 정상화해야 한다.
+
+#### 라이브 검증 순서
+
+1. 위 필수 보완 전에는 `BARJUNG_NAVER_MODE=draft`, `BARJUNG_HEADLESS=false`로 대표 매물 1건만 실행한다.
+2. 저장된 글에서 제목, 사진 개수·순서, 사진 아래 원고 위치, 법정 고지, 해시태그와 카테고리를 사람이 확인한다.
+3. 필수 보완과 임시저장 검증이 끝난 뒤에만 `publish`를 켜고, 게시 URL과 공개 글 내용을 다시 확인한다.
+4. 실제 라이브 결과를 이 절에 날짜·계정 비식별 식별자·성공 URL 확인 여부·발견된 셀렉터 차이로 추가한다. 비밀값과 로그인 세션은 기록하지 않는다.
