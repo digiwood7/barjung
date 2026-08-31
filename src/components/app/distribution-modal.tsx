@@ -16,6 +16,7 @@ interface DistributionModalProps {
   onUpdate: (targets: DistributionTarget[]) => void;
   requestDistribution: (propertyId: string, platforms?: Platform[]) => Promise<Property>;
   getProperty: (propertyId: string) => Promise<Property | null>;
+  initialPlatforms?: Platform[];
 }
 
 function useDemoSimulation(enabled: boolean, setTargets: React.Dispatch<React.SetStateAction<DistributionTarget[]>>) {
@@ -30,7 +31,7 @@ function useDemoSimulation(enabled: boolean, setTargets: React.Dispatch<React.Se
   }, [enabled, setTargets]);
 }
 
-export function DistributionModal({ property, mode, agent, onClose, onUpdate, requestDistribution, getProperty }: DistributionModalProps) {
+export function DistributionModal({ property, mode, agent, onClose, onUpdate, requestDistribution, getProperty, initialPlatforms }: DistributionModalProps) {
   const live = mode === "live";
   const [targets, setTargets] = useState<DistributionTarget[]>(() => PLATFORMS.map((platform) => ({ platform, status: "queued", progress: 0 })));
   const [error, setError] = useState("");
@@ -44,11 +45,11 @@ export function DistributionModal({ property, mode, agent, onClose, onUpdate, re
     if (!live || requested.current) return;
     requested.current = true;
     let alive = true;
-    requestDistribution(property.id)
+    requestDistribution(property.id, initialPlatforms)
       .then((updated) => { if (alive) setTargets(updated.targets); })
       .catch((cause: unknown) => { if (alive) setError(cause instanceof Error ? cause.message : "배포 요청에 실패했습니다."); });
     return () => { alive = false; };
-  }, [live, property.id, requestDistribution]);
+  }, [live, property.id, requestDistribution, initialPlatforms]);
 
   const pending = targets.some((t) => !terminalStatuses.has(t.status));
   useEffect(() => {

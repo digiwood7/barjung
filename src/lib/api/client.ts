@@ -13,6 +13,15 @@ async function call<T>(input: string, init?: RequestInit): Promise<T> {
   return payload;
 }
 
+async function uploadMedia(propertyId: string, files: File[]): Promise<Property> {
+  const body = new FormData();
+  files.forEach((file) => body.append("files", file, file.name));
+  const response = await fetch(`/api/properties/${encodeURIComponent(propertyId)}/media`, { method: "POST", body, cache: "no-store" });
+  const payload = await response.json().catch(() => ({})) as Property & { message?: string };
+  if (!response.ok) throw new Error(payload.message || `사진 업로드 실패 (${response.status})`);
+  return payload;
+}
+
 function crud<T extends { id: string }>(base: string): CrudRepository<T> {
   return {
     list: () => call<T[]>(base),
@@ -37,6 +46,7 @@ export function createApiRepository(initial?: WorkspaceSnapshot): BarjungReposit
       try { return await call<Property>(`/api/properties/${encodeURIComponent(id)}`); }
       catch { return null; }
     },
+    uploadPropertyMedia: uploadMedia,
     requestDistribution: (propertyId, platforms?: Platform[]) => call<Property>("/api/distribution", { method: "POST", body: JSON.stringify({ propertyId, platforms }) }),
     updateSettings: (patch: Partial<AppSettings>) => call<AppSettings>("/api/settings", { method: "PATCH", body: JSON.stringify(patch) }),
   };

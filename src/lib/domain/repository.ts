@@ -35,6 +35,8 @@ export interface BarjungRepository {
   employees: CrudRepository<Employee>;
   customers: CrudRepository<Customer>;
   getProperty(id: string): Promise<Property | null>;
+  /** 로컬 Python으로 사진을 최적화한 뒤 고객 Storage에 저장한다. */
+  uploadPropertyMedia(propertyId: string, files: File[]): Promise<Property>;
   /** 플랫폼 배포 작업을 만든다(생략하면 4개 전부). 라이브 모드에서는 Windows 실행기가 큐를 가져간다. */
   requestDistribution(propertyId: string, platforms?: Platform[]): Promise<Property>;
   updateSettings(patch: Partial<AppSettings>): Promise<AppSettings>;
@@ -106,12 +108,20 @@ export function createDemoRepository(seed: DemoSeed): BarjungRepository {
     async getProperty(id) {
       return (await properties.list()).find((item) => item.id === id) ?? null;
     },
+    async uploadPropertyMedia(propertyId, files) {
+      const property = await this.getProperty(propertyId);
+      if (!property) throw new Error("매물을 찾을 수 없습니다.");
+      return properties.update(propertyId, { photos: files.length });
+    },
     async requestDistribution(propertyId, platforms) {
       const property = await this.getProperty(propertyId);
       if (!property) throw new Error("매물을 찾을 수 없습니다.");
       const missing = validateDisclosure(property.disclosure);
       if (missing.length) throw new Error(`법정 고지 필수값 누락: ${missing.join(", ")}`);
-      const selected = platforms?.length ? platforms : PLATFORMS;
+      const naver = property.targets.find((target) => target.platform === "naver");
+      const naverReady = naver?.status === "succeeded" || (naver?.status === "not_configured" && naver.errorCode === "draft_saved");
+      const selected = platforms?.length ? platforms : naverReady ? PLATFORMS.filter((platform) => platform !== "naver") : ["naver"];
+      if (selected.some((platform) => platform !== "naver") && !naverReady) throw new Error("네이버 글을 먼저 완료하세요.");
       return properties.update(propertyId, {
         targets: property.targets.map((target) => selected.includes(target.platform) ? { platform: target.platform, status: "queued", progress: 0 } : target),
       });

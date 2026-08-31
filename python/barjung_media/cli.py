@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import glob
 import json
 import os
@@ -34,7 +35,10 @@ def expand_images(patterns: list[Path]) -> list[Path]:
     for pattern in patterns:
         text = str(pattern)
         if any(ch in text for ch in "*?["):
-            matches = sorted(Path(m) for m in glob.glob(text))
+            matches = sorted(
+                Path(m) for m in glob.glob(text)
+                if fnmatch.fnmatchcase(Path(m).name, pattern.name)
+            )
         elif pattern.is_dir():
             matches = sorted(p for p in pattern.iterdir() if p.suffix.lower() in IMAGE_SUFFIXES)
         else:

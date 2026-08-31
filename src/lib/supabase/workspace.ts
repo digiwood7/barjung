@@ -224,8 +224,15 @@ export async function requestDistribution(ctx: WorkspaceContext, propertyId: str
   const missing = validateDisclosure(property.disclosure);
   if (missing.length) throw new Error(`법정 고지 필수값 누락: ${missing.join(", ")}`);
   const block = formatDisclosureBlock(property.disclosure);
-  const selected = (platforms?.length ? PLATFORMS.filter((platform) => platforms.includes(platform)) : [...PLATFORMS]);
+  const naver = property.targets.find((target) => target.platform === "naver");
+  const naverReady = naver?.status === "succeeded" || (naver?.status === "not_configured" && naver.errorCode === "draft_saved");
+  const selected: Platform[] = platforms?.length
+    ? PLATFORMS.filter((platform) => platforms.includes(platform))
+    : naverReady ? PLATFORMS.filter((platform) => platform !== "naver") : ["naver"];
   if (!selected.length) throw new Error("배포할 플랫폼을 선택하세요.");
+  if (selected.some((platform) => platform !== "naver") && !naverReady) {
+    throw new Error("네이버 글 임시저장 또는 발행을 먼저 완료해야 다른 플랫폼을 배포할 수 있습니다.");
+  }
 
   const texts = draftTexts({ copies: property.copies, employeeCopy: property.employeeCopy });
   const absent = selected.filter((platform) => !texts[platform]);

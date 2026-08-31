@@ -23,7 +23,7 @@ interface PropertyWizardProps {
   mode: WorkspaceMode;
   employees: Employee[];
   onClose: () => void;
-  onFinish: (input: NewRecord<Property>) => Promise<void> | void;
+  onFinish: (input: NewRecord<Property>, photos: File[]) => Promise<void> | void;
 }
 
 function parcelFromSelectedAddress(selected: SelectedAddress | null): Omit<ParcelAddressInput, "address"> | null {
@@ -60,6 +60,7 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
   const [registry, setRegistry] = useState<BuildingRegisterLookupResult | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [photos, setPhotos] = useState<File[]>([]);
 
   useEffect(() => { if (step !== 1 || optimize >= 100) return; const timer = window.setInterval(() => setOptimize((v) => Math.min(100, v + 4)), 70); return () => window.clearInterval(timer); }, [step, optimize]);
 
@@ -105,11 +106,11 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
       exactAddress: [address.trim(), detailAddress.trim()].filter(Boolean).join(" "), publicAddress: disclosure.location || address.trim(),
       deposit: Number(deposit) || 0, rent: Number(rent) || 0, maintenance: Number(maintenance) || 0,
       registeredBy: employee?.name ?? "미지정", registeredById: employee?.id ?? null, createdAt: "방금 전",
-      photos: demo ? 10 : 0, accent: accentFor(`${title}${address}${Date.now()}`), employeeCopy: copies.naver, copies: { ...copies }, disclosure,
+      photos: demo ? 10 : photos.length, accent: accentFor(`${title}${address}${Date.now()}`), employeeCopy: copies.naver, copies: { ...copies }, disclosure,
       targets: PLATFORMS.map((platform) => ({ platform, status: "not_requested", progress: 0 })),
     };
     setSaving(true); setSaveError("");
-    try { await onFinish(input); }
+    try { await onFinish(input, photos); }
     catch (error) { setSaveError(error instanceof Error ? error.message : "매물을 저장하지 못했습니다."); }
     finally { setSaving(false); }
   };
@@ -142,8 +143,8 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
         )}
         {step === 1 && !demo && (
           <div>
-            <div className="drop-zone"><Upload size={28} /><strong>사진은 매물 등록 뒤 Windows PC에서 올립니다</strong><small>원본은 PC에 두고, Python이 EXIF 를 지우고 압축한 사진만 고객 Storage 에 저장합니다.</small></div>
-            <div className="notice" style={{ marginTop: 12 }}><FileCheck2 size={17} /><div><strong>등록이 끝나면 매물 상세에 실행 명령이 표시됩니다.</strong><small>명령 한 줄로 최적화·업로드·메타데이터 저장까지 처리됩니다. 사진 없이도 매물은 저장됩니다.</small></div></div>
+            <label className="drop-zone media-drop-zone"><input aria-label="매물 사진 선택" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => setPhotos(Array.from(event.target.files ?? []))} /><Upload size={28} /><strong>{photos.length ? `현장 사진 ${photos.length}장을 선택했습니다` : "현장 사진을 선택하세요"}</strong><small>매물 등록 시 Windows 로컬 Python이 EXIF를 제거하고 축소한 JPEG만 Supabase에 올립니다.</small></label>
+            <div className="notice" style={{ marginTop: 12 }}><FileCheck2 size={17} /><div><strong>{photos.length ? "Python 최적화 준비 완료" : "JPG·PNG·WebP, 최대 30장"}</strong><small>{photos.length ? photos.map((file) => file.name).join(" · ") : "원본은 Supabase에 저장하지 않습니다. 사진 없이도 매물 등록은 가능합니다."}</small></div></div>
           </div>
         )}
         {step === 2 && (
@@ -167,8 +168,8 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
           <div className="review-card">
             <div className="review-icon"><Check size={28} /></div>
             <h3>매물 등록 준비가 끝났습니다</h3>
-            <p>{demo ? "최적화 사진 10장, 건축물대장 조회값, 직원 작성 원고를 저장합니다." : "매물 정보, 법정 고지, 직원 작성 원고를 고객 Supabase 에 저장합니다."}</p>
-            <div className="review-summary"><span><ImageIcon size={16} /> 사진 <strong>{demo ? "6.8MB" : "등록 후 업로드"}</strong></span><span><FileCheck2 size={16} /> 고지사항 <strong>{13 - missing.length}/13</strong></span><span><MessageSquareText size={16} /> 채널 원고 <strong>{copyCount}개</strong></span></div>
+            <p>{demo ? "최적화 사진 10장, 건축물대장 조회값, 직원 작성 원고를 저장합니다." : "매물 저장 후 사진을 Python으로 최적화하고 네이버 글쓰기 작업으로 이동합니다."}</p>
+            <div className="review-summary"><span><ImageIcon size={16} /> 사진 <strong>{demo ? "6.8MB" : `${photos.length}장`}</strong></span><span><FileCheck2 size={16} /> 고지사항 <strong>{13 - missing.length}/13</strong></span><span><MessageSquareText size={16} /> 채널 원고 <strong>{copyCount}개</strong></span></div>
             <div className="notice"><FileCheck2 size={17} /><div><strong>현재 검수 후 배포 모드입니다.</strong><small>등록 후 매물 상세에서 원고를 확인하고 전체 배포를 실행합니다.</small></div></div>
             {saveError && <div className="error-guide"><CircleAlert size={17} /><span>{saveError}</span></div>}
           </div>
@@ -180,7 +181,7 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
           <span>{step + 1} / {steps.length}</span>
           {step < steps.length - 1
             ? <button className="primary" disabled={(step === 0 && !basicsReady) || (step === 1 && optimize < 100) || (step === 3 && missing.length > 0)} onClick={() => setStep(step + 1)}>다음 <ArrowRight size={16} /></button>
-            : <button className="primary" disabled={saving} onClick={finish}><Check size={16} /> {saving ? "저장 중" : "매물 등록"}</button>}
+            : <button className="primary" disabled={saving} onClick={finish}><Check size={16} /> {saving ? "사진 최적화·저장 중" : demo ? "매물 등록" : "등록 후 네이버 글쓰기"}</button>}
         </div>
       </div>
     </div></div>

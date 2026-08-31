@@ -1,7 +1,7 @@
 "use client";
 
-import { Bot, Database, Zap } from "lucide-react";
-import { useState } from "react";
+import { Bot, Database, RefreshCcw, Zap } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { PLATFORMS } from "@/lib/domain/types";
 import type { AddressPolicy, AgentStatus, AppSettings, OfficeInfo, Property, WorkspaceMode } from "@/lib/domain/types";
 import { Badge, platformInitial, platformName } from "./ui";
@@ -19,8 +19,40 @@ interface SettingsViewProps {
 
 export function SettingsView({ settings, agent, office, mode, properties, onUpdate }: SettingsViewProps) {
   const [showConnection, setShowConnection] = useState(false);
+  const [naverStatus, setNaverStatus] = useState<"checking" | "connected" | "expired" | "action_required" | "local_required">("checking");
+  const [naverMessage, setNaverMessage] = useState("네이버 로그인 상태를 확인하는 중입니다.");
+  const [naverBusy, setNaverBusy] = useState(false);
   const photoCount = properties.reduce((sum, property) => sum + property.photos, 0);
   const auto = settings.publishMode === "automatic";
+
+  const checkNaver = useCallback(async () => {
+    setNaverStatus("checking");
+    try {
+      const response = await fetch("/api/naver/session", { cache: "no-store" });
+      const payload = await response.json() as { status?: typeof naverStatus; message?: string };
+      setNaverStatus(payload.status || "action_required");
+      setNaverMessage(payload.message || "네이버 로그인 상태를 확인하지 못했습니다.");
+    } catch {
+      setNaverStatus("action_required");
+      setNaverMessage("로컬 Windows 실행기와 연결하지 못했습니다.");
+    }
+  }, []);
+
+  useEffect(() => { checkNaver().catch(() => undefined); }, [checkNaver]);
+
+  const openNaverLogin = async () => {
+    setNaverBusy(true);
+    try {
+      const response = await fetch("/api/naver/session", { method: "POST" });
+      const payload = await response.json() as { message?: string };
+      setNaverMessage(payload.message || "네이버 로그인 창을 확인하세요.");
+      window.setTimeout(() => { checkNaver().catch(() => undefined); }, 8000);
+    } finally {
+      setNaverBusy(false);
+    }
+  };
+
+  const naverConnected = naverStatus === "connected";
   return (
     <div className="view-stack">
       <section className="page-heading"><div><span className="eyebrow">WORKSPACE SETTINGS</span><h1>운영 설정</h1><p>배포 방식과 플랫폼별 주소 공개 범위를 설정합니다.</p></div></section>
@@ -42,6 +74,14 @@ export function SettingsView({ settings, agent, office, mode, properties, onUpda
               <dt>실행 명령</dt><dd><code>.\scripts\start-local.ps1 -WithRunner</code></dd>
             </dl>
           )}
+        </div>
+        <div className="panel setting-card span-2 naver-session-card">
+          <div className={`setting-icon ${naverConnected ? "green" : naverStatus === "checking" ? "blue" : "red"}`}><span className="platform-logo naver">N</span></div>
+          <div><h3>네이버 블로그 로그인</h3><p>{naverMessage}</p><Badge tone={naverConnected ? "green" : naverStatus === "checking" || naverStatus === "local_required" ? "amber" : "red"}><span className={`live-dot ${naverConnected ? "online" : naverStatus === "checking" ? "degraded" : "offline"}`} /> {naverConnected ? "로그인 유지 중" : naverStatus === "checking" ? "확인 중" : "재로그인 필요"}</Badge></div>
+          <div className="naver-session-actions">
+            <button className="secondary" onClick={() => checkNaver()} disabled={naverBusy || naverStatus === "checking"}><RefreshCcw size={14} /> 상태 확인</button>
+            {!naverConnected && naverStatus !== "local_required" && <button className="primary" onClick={openNaverLogin} disabled={naverBusy}>{naverBusy ? "여는 중" : "네이버 재로그인"}</button>}
+          </div>
         </div>
         <div className="panel setting-card">
           <div className="setting-icon blue"><Database size={20} /></div>

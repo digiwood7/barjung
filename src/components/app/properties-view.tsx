@@ -77,6 +77,9 @@ interface PropertyDetailProps {
 export function PropertyDetail({ property, office, mode, onClose, onPublish, onEdit }: PropertyDetailProps) {
   const missing = validateDisclosure(property.disclosure).map((key) => disclosureLabel[key]);
   const thumbs = Math.min(3, property.photos);
+  const naver = property.targets.find((target) => target.platform === "naver");
+  const naverReady = naver?.status === "succeeded" || (naver?.status === "not_configured" && naver.errorCode === "draft_saved");
+  const naverBusy = naver?.status === "queued" || naver?.status === "running";
   return (
     <div className="drawer-backdrop" onMouseDown={onClose}>
       <aside className="detail-drawer" onMouseDown={(e) => e.stopPropagation()}>
@@ -107,7 +110,7 @@ export function PropertyDetail({ property, office, mode, onClose, onPublish, onE
             ))}
           </div>
         </section>
-        <div className="drawer-actions"><button className="secondary" onClick={onEdit}>매물 수정</button><button className="primary" disabled={missing.length > 0} onClick={onPublish}><Zap size={16} /> 전체 배포</button></div>
+        <div className="drawer-actions"><button className="secondary" onClick={onEdit}>매물 수정</button><button className="primary" disabled={missing.length > 0 || naverBusy} onClick={onPublish}><Zap size={16} /> {naverReady ? "후속 플랫폼 배포" : naverBusy ? "네이버 작업 진행 중" : "네이버 글쓰기 시작"}</button></div>
       </aside>
     </div>
   );
