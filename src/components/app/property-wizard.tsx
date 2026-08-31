@@ -12,7 +12,7 @@ import { accentFor, areaLabel } from "@/lib/supabase/mappers";
 import { Badge, PlatformLogo, automaticDisclosureKeys, disclosureLabel, platformName } from "./ui";
 import { AddressSearch, type SelectedAddress } from "./address-search";
 
-const steps = ["기본정보", "사진 최적화", "건축물대장", "고지사항 입력", "채널 원고", "등록 확인"];
+const steps = ["기본정보", "사진 최적화", "건축물대장", "고지사항 입력", "채널 추가내용", "등록 확인"];
 
 const demoDisclosure: LegalDisclosure = { location: "대구광역시 북구 산격동 481-5", contractArea: "79.62㎡", propertyCategory: "다가구주택", transactionType: "월세", floor: "4층 중 2층", availableFrom: "즉시 입주", rooms: "방 1, 욕실 1", approvalDate: "2020. 11. 06.", parking: "총 6대", maintenance: "월 7만원 (수도·인터넷 포함)", direction: "", lotNumberNotice: "중개의뢰인 요청으로 상세 지번 비공개", measurementNotice: "면적은 공부상 면적이며 현장 실측과 차이가 있을 수 있습니다." };
 const liveDisclosure: LegalDisclosure = { location: "", contractArea: "", propertyCategory: "", transactionType: "월세", floor: "", availableFrom: "", rooms: "", approvalDate: "", parking: "", maintenance: "", direction: "", lotNumberNotice: "중개의뢰인 요청으로 상세 지번 비공개", measurementNotice: "면적은 공부상 면적이며 현장 실측과 차이가 있을 수 있습니다." };
@@ -20,6 +20,15 @@ const demoCopies: Record<Platform, string> = { naver: "경북대 북문 도보 3
 const emptyCopies: Record<Platform, string> = { naver: "", instagram: "", daangn: "", zigbang: "" };
 const PROPERTY_DRAFT_KEY = "barjung:property-wizard-draft:v1";
 type RegistryStatus = "idle" | "loading" | "live" | "demo" | "failed";
+
+function maintenanceDisclosure(value: string): string {
+  return value ? `월 ${value}만원` : "";
+}
+
+function contractAreaDisclosure(value: string): string {
+  const numeric = value.replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1");
+  return numeric ? `${numeric}㎡` : "";
+}
 
 interface PropertyWizardDraft {
   version: 1;
@@ -101,6 +110,12 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
   const [photos, setPhotos] = useState<File[]>([]);
   const [photoRestoreNotice, setPhotoRestoreNotice] = useState(false);
 
+  const changeMaintenance = (value: string) => {
+    const digits = value.replace(/[^\d]/g, "");
+    setMaintenance(digits);
+    setDisclosure((current) => ({ ...current, maintenance: maintenanceDisclosure(digits) }));
+  };
+
   const saveDraft = () => {
     if (demo || !draftReady || typeof window === "undefined") return;
     const hasContent = Boolean(title.trim() || address.trim() || detailAddress.trim() || photos.length || Object.values(copies).some((value) => value.trim()));
@@ -139,7 +154,6 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
       rooms: "",
       approvalDate: "",
       parking: "",
-      maintenance: "",
       direction: "",
     }));
   };
@@ -197,7 +211,11 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
     setDetailAddress(recoveryDraft.detailAddress);
     setSelectedAddress(recoveryDraft.selectedAddress);
     setRegisteredById(recoveryDraft.registeredById);
-    setDisclosure({ ...liveDisclosure, ...recoveryDraft.disclosure });
+    setDisclosure({
+      ...liveDisclosure,
+      ...recoveryDraft.disclosure,
+      maintenance: maintenanceDisclosure(recoveryDraft.maintenance),
+    });
     setCopies({ ...emptyCopies, ...recoveryDraft.copies });
     setRegistry(recoveryDraft.registry);
     setRegistryStatus(recoveryDraft.registryStatus === "loading" ? "idle" : recoveryDraft.registryStatus);
@@ -251,7 +269,7 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
             <label>거래 형태<select value={disclosure.transactionType} onChange={(event) => setDisclosure((current) => ({ ...current, transactionType: event.target.value }))}><option>월세</option><option>전세</option><option>반전세</option></select></label>
             <label>보증금 (만원)<input inputMode="numeric" value={deposit} onChange={(event) => setDeposit(event.target.value.replace(/[^\d]/g, ""))} /></label>
             <label>월세 (만원)<input inputMode="numeric" value={rent} onChange={(event) => setRent(event.target.value.replace(/[^\d]/g, ""))} /></label>
-            <label>관리비 (만원)<input inputMode="numeric" value={maintenance} onChange={(event) => setMaintenance(event.target.value.replace(/[^\d]/g, ""))} /></label>
+            <label>관리비 (만원)<input inputMode="numeric" value={maintenance} onChange={(event) => changeMaintenance(event.target.value)} /></label>
             <label>등록 직원<select value={registeredById} onChange={(event) => setRegisteredById(event.target.value)}>{employees.length === 0 && <option value="">직원 미등록</option>}{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name} · {employee.role}</option>)}</select></label>
             <label className="span-2">정확한 주소<AddressSearch value={address} onChange={changeAddress} onSelect={selectAddress} /></label>
             <label className="span-2">상세주소<input aria-label="상세주소" value={detailAddress} onChange={(event) => setDetailAddress(event.target.value)} placeholder="동·층·호 등 (내부 전용)" /></label>
@@ -283,19 +301,19 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
         {step === 3 && (
           <div>
             <div className="legal-banner"><FileCheck2 size={21} /><div><strong>공인중개사법 고지사항</strong><small>자동 조회값과 현장 입력값을 모두 확인해야 배포할 수 있습니다.</small></div><Badge tone={missing.length ? "amber" : "green"}>{missing.length ? `${missing.length}개 확인 필요` : "13/13 확인"}</Badge></div>
-            <div className="legal-form">{(Object.keys(disclosureLabel) as Array<keyof LegalDisclosure>).map((key) => { const automatic = registryStatus === "live" && automaticDisclosureKeys.includes(key); return <label key={key}><span>{disclosureLabel[key]}<em>{automaticDisclosureKeys.includes(key) ? "대장" : "현장"}</em></span><input value={disclosure[key]} readOnly={automatic} placeholder={key === "direction" ? "예: 남동향 (주실 창 기준)" : ""} onChange={automatic ? undefined : (event) => setDisclosure((current) => ({ ...current, [key]: event.target.value }))} /></label>; })}</div>
+            <div className="legal-form">{(Object.keys(disclosureLabel) as Array<keyof LegalDisclosure>).map((key) => { const automatic = registryStatus === "live" && automaticDisclosureKeys.includes(key); const sharedMaintenance = key === "maintenance"; const contractArea = key === "contractArea"; return <label key={key}><span>{disclosureLabel[key]}<em>{automaticDisclosureKeys.includes(key) ? "대장" : "현장"}</em></span>{contractArea ? <div className="unit-input"><input inputMode="decimal" aria-label={`${disclosureLabel[key]} 값`} value={disclosure.contractArea.replace(/㎡/g, "")} placeholder="예: 79.62" onChange={(event) => setDisclosure((current) => ({ ...current, contractArea: contractAreaDisclosure(event.target.value) }))} /><b>㎡</b></div> : <input inputMode={sharedMaintenance ? "numeric" : undefined} value={sharedMaintenance ? maintenance : disclosure[key]} readOnly={automatic} placeholder={key === "direction" ? "예: 남동향 (주실 창 기준)" : sharedMaintenance ? "만원" : ""} onChange={automatic ? undefined : sharedMaintenance ? (event) => changeMaintenance(event.target.value) : (event) => setDisclosure((current) => ({ ...current, [key]: event.target.value }))} />}</label>; })}</div>
             {missing.length > 0 && <div className="error-guide"><CircleAlert size={17} /><span><strong>{missing.join(", ")}</strong> 항목을 입력하면 배포 준비가 완료됩니다.</span>{demo && !disclosure.direction && <button type="button" onClick={() => setDisclosure((current) => ({ ...current, direction: "남동향 (주실 창 기준)" }))}>방향 예시값 입력</button>}</div>}
           </div>
         )}
         {step === 4 && (
-          <div className="copy-grid">{PLATFORMS.map((platform) => <div className="copy-card" key={platform}><div><PlatformLogo platform={platform} compact /><strong>{platformName[platform]}</strong><Badge tone="blue">직접 작성</Badge></div><textarea aria-label={`${platformName[platform]} 게시 원고`} value={copies[platform]} onChange={(event) => setCopies((current) => ({ ...current, [platform]: event.target.value }))} placeholder={`${platformName[platform]}에 올릴 원고를 직접 작성하세요.`} /><small><ShieldCheck size={12} /> 검증된 법정 고지는 게시 시 수정 불가 영역으로 자동 첨부</small></div>)}</div>
+          <div className="copy-grid">{PLATFORMS.map((platform) => <div className="copy-card" key={platform}><div><PlatformLogo platform={platform} compact /><strong>{platformName[platform]}</strong><Badge tone="blue">추가 내용</Badge></div><textarea aria-label={`${platformName[platform]} 추가 내용`} value={copies[platform]} onChange={(event) => setCopies((current) => ({ ...current, [platform]: event.target.value }))} placeholder="자동 작성될 게시글에 직접 추가할 내용이 있으면 적어 주세요." /><small><ShieldCheck size={12} /> 매물 정보와 검증된 법정 고지는 게시글에 자동으로 포함됩니다.</small></div>)}</div>
         )}
         {step === 5 && (
           <div className="review-card">
             <div className="review-icon"><Check size={28} /></div>
             <h3>매물 등록 준비가 끝났습니다</h3>
-            <p>{demo ? "최적화 사진 10장, 건축물대장 조회값, 직원 작성 원고를 저장합니다." : "매물 저장 후 사진을 Python으로 최적화하고 네이버 글쓰기 작업으로 이동합니다."}</p>
-            <div className="review-summary"><span><ImageIcon size={16} /> 사진 <strong>{demo ? "6.8MB" : `${photos.length}장`}</strong></span><span><FileCheck2 size={16} /> 고지사항 <strong>{13 - missing.length}/13</strong></span><span><MessageSquareText size={16} /> 채널 원고 <strong>{copyCount}개</strong></span></div>
+            <p>{demo ? "최적화 사진 10장, 건축물대장 조회값, 직원 추가 내용을 저장합니다." : "매물 저장 후 Windows 실행기가 사진을 Python으로 최적화하고 전체 발행을 시작합니다."}</p>
+            <div className="review-summary"><span><ImageIcon size={16} /> 사진 <strong>{demo ? "6.8MB" : `${photos.length}장`}</strong></span><span><FileCheck2 size={16} /> 고지사항 <strong>{13 - missing.length}/13</strong></span><span><MessageSquareText size={16} /> 추가 내용 <strong>{copyCount}개</strong></span></div>
             <div className="notice"><FileCheck2 size={17} /><div><strong>현재 검수 후 배포 모드입니다.</strong><small>등록 후 매물 상세에서 원고를 확인하고 전체 배포를 실행합니다.</small></div></div>
             {saveError && <div className="error-guide"><CircleAlert size={17} /><span>{saveError}</span></div>}
           </div>
@@ -307,7 +325,7 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
           <span>{step + 1} / {steps.length}</span>
           {step < steps.length - 1
             ? <button className="primary" disabled={(step === 0 && !basicsReady) || (step === 1 && optimize < 100) || (step === 3 && missing.length > 0)} onClick={() => setStep(step + 1)}>다음 <ArrowRight size={16} /></button>
-            : <button className="primary" disabled={saving} onClick={finish}><Check size={16} /> {saving ? "사진 최적화·저장 중" : demo ? "매물 등록" : "등록 후 네이버 글쓰기"}</button>}
+            : <button className="primary" disabled={saving} onClick={finish}><Check size={16} /> {saving ? "사진 최적화·저장 중" : demo ? "매물 등록" : "등록 후 전체 발행"}</button>}
         </div>
       </div>
     </div></div>

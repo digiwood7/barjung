@@ -75,13 +75,13 @@ Set-ExecutionPolicy -Scope Process Bypass
    ```
 
    나머지 값은 `.env.example` 설명대로 두면 됩니다. 값을 Git 에 올리지 않습니다.
-4. 관리자와 실행기를 함께 다시 켭니다.
+4. Vercel 관리자와 연결될 Windows 실행기만 켭니다. 로컬 웹서버는 필요하지 않습니다.
 
    ```powershell
-   .\scripts\start-local.ps1 -WithRunner
+   .\scripts\start-runner.ps1
    ```
 
-   화면 상단 배지가 **"고객 DB 연결"** 로 바뀌고, 왼쪽 실행기 카드가 **온라인**(실행기가 5초마다 heartbeat) 이면 연결 완료입니다. 이때부터 매물·고객·직원·설정은 모두 고객 Supabase 에 저장됩니다.
+   `barjeong.vercel.app`의 왼쪽 실행기 카드가 **온라인**(실행기가 5초마다 heartbeat)이면 연결 완료입니다. 이때부터 사진 최적화와 플랫폼 발행은 같은 실행기가 순서대로 처리합니다.
 
 연결 상태 점검 명령 (값은 출력하지 않음):
 
@@ -93,22 +93,17 @@ Invoke-RestMethod http://localhost:3000/api/workspace | Select-Object mode, read
 
 ## 매물 사진 올리기
 
-사진은 브라우저가 아니라 고객 PC 의 Python 이 최적화해서 올립니다. 매물을 등록하면 매물 상세 화면에 아래 형태의 명령이 표시됩니다(사업장 ID·매물 ID 가 채워진 상태). 원본은 그대로 두고 EXIF 를 지운 최적화본만 private `property-media` 버킷에 올라가며, `property_media` 테이블에 크기·해상도·checksum 이 기록돼 화면의 사진 수에 반영됩니다.
+사진을 선택하면 브라우저는 signed upload로 private `property-media-staging` 버킷에 원본을 임시 전달합니다. Windows 실행기가 큐를 가져가 고객 PC의 Python으로 축소·EXIF 제거를 수행하고, 최적화본만 `property-media`에 저장한 뒤 staging 원본을 삭제합니다. `property_media` 테이블에는 크기·해상도·checksum이 기록됩니다. 이 과정에 `localhost:3000` 웹서버는 필요하지 않습니다.
 
 ```powershell
-. .\scripts\import-project-env.ps1
-python\.venv\Scripts\python.exe -m barjung_media.cli "C:\매물사진\*.jpg" `
-  --output ".\tmp\optimized" --manifest ".\tmp\manifest.json" `
-  --upload --office-id "<사업장 UUID>" --property-id "<매물 UUID>"
+.\scripts\start-runner.ps1
 ```
-
-`*.jpg` 같은 와일드카드와 폴더 경로는 CLI 가 직접 풀어 줍니다(PowerShell 은 풀어 주지 않음).
 
 ## 배포 흐름
 
-1. 매물 상세에서 법정 고지 13개가 모두 채워져야 **전체 배포** 버튼이 켜집니다.
+1. 매물 상세에서 법정 고지 13개가 모두 채워져야 **전체 발행** 버튼이 켜집니다.
 2. 누르면 `distribution_jobs` 1건과 플랫폼별 `distribution_targets` 4건이 `queued` 로 생성됩니다(같은 매물을 1분 안에 다시 요청하면 거부).
-3. Windows 실행기가 큐를 가져가 어댑터를 실행하고 결과(`succeeded`/`failed`/`not_configured`, 게시 URL, 오류 요약)를 기록합니다. 화면은 2초마다 결과를 읽어 보여 줍니다.
+3. Windows 실행기가 네이버 → 인스타그램 → 당근 → 직방 순서로 하나씩 실행하고 결과(`succeeded`/`failed`/`not_configured`, 게시 URL, 오류 요약)를 기록합니다. 화면은 플랫폼별 진행률과 완료 상태를 보여 줍니다.
 4. 실패·미연결 플랫폼은 "다시 확인" 으로 그 플랫폼만 재요청할 수 있습니다.
 5. 네이버 블로그 어댑터는 이식돼 있고(`BARJUNG_NAVER_ENABLED=true` 로 켬, 기본은 임시저장 모드), 인스타·당근·직방은 아직 `not_configured` 입니다. 현장 연결 순서는 [플랫폼 어댑터 가이드](docs/PLATFORM_ADAPTER_GUIDE.md)를 따릅니다.
 
@@ -119,7 +114,7 @@ DGagent 의 네이버 블로그 Playwright 코드에서 **글 작성·사진 업
 ```powershell
 npm --prefix runner run naver:login      # 최초 1회, '로그인 상태 유지' 체크
 # .env.local: BARJUNG_NAVER_ENABLED=true, BARJUNG_NAVER_MODE=draft (임시저장) → 검증 후 publish
-.\scripts\start-local.ps1 -WithRunner
+.\scripts\start-runner.ps1
 ```
 
 ## 테스트

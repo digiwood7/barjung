@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -11,6 +11,31 @@ export type Database = {
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.5"
+  }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -642,6 +667,76 @@ export type Database = {
           },
         ]
       }
+      media_optimization_jobs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_summary: string | null
+          id: string
+          lease_agent_id: string | null
+          lease_expires_at: string | null
+          office_id: string
+          property_id: string
+          queued_at: string | null
+          source_files: Json
+          started_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error_summary?: string | null
+          id?: string
+          lease_agent_id?: string | null
+          lease_expires_at?: string | null
+          office_id: string
+          property_id: string
+          queued_at?: string | null
+          source_files?: Json
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error_summary?: string | null
+          id?: string
+          lease_agent_id?: string | null
+          lease_expires_at?: string | null
+          office_id?: string
+          property_id?: string
+          queued_at?: string | null
+          source_files?: Json
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_optimization_jobs_lease_agent_id_fkey"
+            columns: ["lease_agent_id"]
+            isOneToOne: false
+            referencedRelation: "local_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_optimization_jobs_office_id_fkey"
+            columns: ["office_id"]
+            isOneToOne: false
+            referencedRelation: "offices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_optimization_jobs_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       offices: {
         Row: {
           created_at: string
@@ -932,6 +1027,30 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      claim_media_optimization_job: {
+        Args: { p_agent_id: string; p_lease_seconds?: number }
+        Returns: {
+          completed_at: string | null
+          created_at: string
+          error_summary: string | null
+          id: string
+          lease_agent_id: string | null
+          lease_expires_at: string | null
+          office_id: string
+          property_id: string
+          queued_at: string | null
+          source_files: Json
+          started_at: string | null
+          status: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "media_optimization_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       verify_admin_credentials: {
         Args: { p_password: string; p_username: string }
         Returns: {
@@ -1088,6 +1207,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       address_policy: ["lot", "district", "hidden"],

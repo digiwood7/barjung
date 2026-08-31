@@ -45,7 +45,7 @@ describe("PropertyWizard 사진 최적화 단계", () => {
   it("건축물대장 조회가 성공하면 확인 버튼을 초록 완료 상태로 바꾼다", async () => {
     class FakePostcode {
       constructor(private readonly options: { oncomplete(data: object): void }) {}
-      open() {
+      embed() {
         this.options.oncomplete({
           address: "대구 북구 산격동 1240-1", roadAddress: "대구 북구 대동로1길 12", jibunAddress: "대구 북구 산격동 1240-1",
           zonecode: "41535", buildingCode: "", buildingName: "", bcode: "2723011100", userSelectedType: "J",
@@ -71,7 +71,7 @@ describe("PropertyWizard 사진 최적화 단계", () => {
   it("주소를 바꾸면 이전 대장 주소와 자동 고지값을 모두 초기화한다", async () => {
     class FakePostcode {
       constructor(private readonly options: { oncomplete(data: object): void }) {}
-      open() {
+      embed() {
         this.options.oncomplete({
           address: "대구 북구 산격동 1240-1", roadAddress: "대구 북구 대동로1길 12", jibunAddress: "대구 북구 산격동 1240-1",
           zonecode: "41535", buildingCode: "", buildingName: "", bcode: "2723011100", userSelectedType: "J",
@@ -98,5 +98,63 @@ describe("PropertyWizard 사진 최적화 단계", () => {
     fireEvent.click(screen.getByRole("button", { name: "고지사항 직접 입력" }));
     expect(screen.getByRole("textbox", { name: "주차대장" })).toHaveValue("");
     expect(screen.getByRole("textbox", { name: "대상물 종류대장" })).toHaveValue("");
+  });
+
+  it("주소 검색창은 바깥 영역을 눌러도 닫히지 않고 닫기 버튼으로만 닫힌다", () => {
+    class FakePostcode {
+      embed() {}
+    }
+    window.kakao = { Postcode: FakePostcode as never };
+    render(<PropertyWizard mode="live" employees={[]} onClose={() => undefined} onFinish={() => undefined} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "주소 검색" }));
+    const dialog = screen.getByRole("dialog", { name: "주소 검색창" });
+    fireEvent.click(dialog.parentElement as HTMLElement);
+    expect(screen.getByRole("dialog", { name: "주소 검색창" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "주소 검색 닫기" }));
+    expect(screen.queryByRole("dialog", { name: "주소 검색창" })).not.toBeInTheDocument();
+  });
+
+  it("1단계 관리비를 4단계의 같은 관리비 입력값으로 유지한다", () => {
+    render(<PropertyWizard mode="live" employees={[]} onClose={() => undefined} onFinish={() => undefined} />);
+    fireEvent.change(screen.getByLabelText("매물 제목"), { target: { value: "관리비 테스트" } });
+    fireEvent.change(screen.getByLabelText("정확한 주소"), { target: { value: "대구 북구 산격동" } });
+    fireEvent.change(screen.getByLabelText("관리비 (만원)"), { target: { value: "10" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /다음/ }));
+    fireEvent.click(screen.getByRole("button", { name: /다음/ }));
+    fireEvent.click(screen.getByRole("button", { name: "고지사항 직접 입력" }));
+    expect(screen.getByRole("textbox", { name: "관리비현장" })).toHaveValue("10");
+  });
+
+  it("계약면적은 숫자만 입력받고 제곱미터 단위를 자동 저장한다", () => {
+    render(<PropertyWizard mode="live" employees={[]} onClose={() => undefined} onFinish={() => undefined} />);
+    fireEvent.change(screen.getByLabelText("매물 제목"), { target: { value: "면적 테스트" } });
+    fireEvent.change(screen.getByLabelText("정확한 주소"), { target: { value: "대구 북구 산격동" } });
+    fireEvent.click(screen.getByRole("button", { name: /다음/ }));
+    fireEvent.click(screen.getByRole("button", { name: /다음/ }));
+    fireEvent.click(screen.getByRole("button", { name: "고지사항 직접 입력" }));
+
+    fireEvent.change(screen.getByRole("textbox", { name: "계약면적 값" }), { target: { value: "79.62㎡" } });
+    expect(screen.getByRole("textbox", { name: "계약면적 값" })).toHaveValue("79.62");
+    expect(screen.getByText("㎡")).toBeInTheDocument();
+  });
+
+  it("5단계는 자동 원고에 추가할 내용만 안내한다", () => {
+    render(<PropertyWizard mode="live" employees={[]} onClose={() => undefined} onFinish={() => undefined} />);
+    fireEvent.change(screen.getByLabelText("매물 제목"), { target: { value: "원고 테스트" } });
+    fireEvent.change(screen.getByLabelText("정확한 주소"), { target: { value: "대구 북구 산격동" } });
+    fireEvent.click(screen.getByRole("button", { name: /다음/ }));
+    fireEvent.click(screen.getByRole("button", { name: /다음/ }));
+    fireEvent.click(screen.getByRole("button", { name: "고지사항 직접 입력" }));
+    const requiredFields = ["계약면적 값", "대상물 종류대장", "해당 층/총 층수현장", "입주가능일현장", "방/욕실현장", "사용승인일대장", "주차대장", "관리비현장", "방향현장"];
+    for (const name of requiredFields) {
+      const field = screen.getByRole("textbox", { name });
+      if (!field.hasAttribute("readonly")) fireEvent.change(field, { target: { value: name === "계약면적 값" ? "20" : name === "관리비현장" ? "5" : "확인" } });
+    }
+    fireEvent.click(screen.getByRole("button", { name: /다음/ }));
+    expect(screen.getAllByPlaceholderText("자동 작성될 게시글에 직접 추가할 내용이 있으면 적어 주세요.")).toHaveLength(4);
+    expect(screen.queryByText("직접 작성")).not.toBeInTheDocument();
   });
 });

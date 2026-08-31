@@ -132,6 +132,24 @@ function draftTexts(input: { copies?: Partial<Record<Platform, string>>; employe
   return result;
 }
 
+function automaticCopy(property: Pick<Property, "title" | "type" | "area" | "publicAddress" | "deposit" | "rent" | "maintenance">, platform: Platform): string {
+  const location = property.area || property.publicAddress;
+  const terms = `보증금 ${property.deposit}만원 / 월세 ${property.rent}만원 / 관리비 ${property.maintenance}만원`;
+  if (platform === "instagram") return `${property.title}\n${location} ${property.type} · ${terms}`;
+  if (platform === "daangn") return `${location} ${property.type} 매물입니다.\n${property.title}\n${terms}`;
+  if (platform === "zigbang") return `${location} / ${property.type} / ${terms}\n${property.title}`;
+  return `${property.title}\n\n${location}에 위치한 ${property.type} 매물입니다.\n${terms}`;
+}
+
+function automaticDraftTexts(property: Property): Record<Platform, string> {
+  const additions = draftTexts({ copies: property.copies, employeeCopy: property.employeeCopy });
+  return Object.fromEntries(PLATFORMS.map((platform) => {
+    const base = automaticCopy(property, platform);
+    const addition = additions[platform]?.trim();
+    return [platform, addition?.startsWith(base) ? addition : addition ? `${base}\n\n${addition}` : base];
+  })) as Record<Platform, string>;
+}
+
 async function insertDrafts(ctx: WorkspaceContext, propertyId: string, texts: Partial<Record<Platform, string>>, legalBlock: string, createdBy: string | null): Promise<void> {
   const entries = Object.entries(texts) as [Platform, string][];
   if (!entries.length) return;
@@ -224,19 +242,12 @@ export async function requestDistribution(ctx: WorkspaceContext, propertyId: str
   const missing = validateDisclosure(property.disclosure);
   if (missing.length) throw new Error(`법정 고지 필수값 누락: ${missing.join(", ")}`);
   const block = formatDisclosureBlock(property.disclosure);
-  const naver = property.targets.find((target) => target.platform === "naver");
-  const naverReady = naver?.status === "succeeded" || (naver?.status === "not_configured" && naver.errorCode === "draft_saved");
   const selected: Platform[] = platforms?.length
     ? PLATFORMS.filter((platform) => platforms.includes(platform))
-    : naverReady ? PLATFORMS.filter((platform) => platform !== "naver") : ["naver"];
+    : [...PLATFORMS];
   if (!selected.length) throw new Error("배포할 플랫폼을 선택하세요.");
-  if (selected.some((platform) => platform !== "naver") && !naverReady) {
-    throw new Error("네이버 글 임시저장 또는 발행을 먼저 완료해야 다른 플랫폼을 배포할 수 있습니다.");
-  }
 
-  const texts = draftTexts({ copies: property.copies, employeeCopy: property.employeeCopy });
-  const absent = selected.filter((platform) => !texts[platform]);
-  if (absent.length) throw new Error(`${absent.join(", ")} 게시 원고가 없습니다. 매물 수정에서 원고를 입력하세요.`);
+  const texts = automaticDraftTexts(property);
   await insertDrafts(ctx, propertyId, texts, block, property.registeredById ?? null);
   const drafts = latestDraftsByPlatform(
     await rows<DraftRow>("원고 조회", ctx.client.from("content_drafts").select("id,property_id,platform,employee_copy,legal_block,version").eq("property_id", propertyId)),

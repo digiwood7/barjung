@@ -1,11 +1,8 @@
+import { createClient } from "@supabase/supabase-js";
 import { createDemoRepository, type BarjungRepository, type CrudRepository } from "@/lib/domain/repository";
 import type { AppSettings, Customer, Employee, Platform, Property, WorkspaceSnapshot } from "@/lib/domain/types";
 import { customers as demoCustomers, employees as demoEmployees, properties as demoProperties } from "@/lib/mock/data";
 
-/**
- * 브라우저 → 고객 PC 로컬 Next 서버(/api/*) 호출 저장소.
- * 서버가 NOT_CONFIGURED(503) 를 돌려주면 demo 저장소로 내려간다.
- */
 async function call<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, { ...init, headers: { "content-type": "application/json", ...(init?.headers ?? {}) }, cache: "no-store" });
   const payload = await response.json().catch(() => ({})) as T & { message?: string };
@@ -13,13 +10,42 @@ async function call<T>(input: string, init?: RequestInit): Promise<T> {
   return payload;
 }
 
+interface PreparedUpload { name: string; type: string; size: number; path: string; token: string }
+interface PreparedMediaJob { jobId: string; bucket: string; uploads: PreparedUpload[] }
+interface MediaJobStatus {
+  status: "uploading" | "queued" | "running" | "succeeded" | "failed";
+  error?: string | null;
+  property?: Property | null;
+}
+
+function browserStorageClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim();
+  if (!url || !key) throw new Error("브라우저 사진 업로드용 Supabase 공개 키가 없습니다.");
+  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+}
+
 async function uploadMedia(propertyId: string, files: File[]): Promise<Property> {
-  const body = new FormData();
-  files.forEach((file) => body.append("files", file, file.name));
-  const response = await fetch(`/api/properties/${encodeURIComponent(propertyId)}/media`, { method: "POST", body, cache: "no-store" });
-  const payload = await response.json().catch(() => ({})) as Property & { message?: string };
-  if (!response.ok) throw new Error(payload.message || `사진 업로드 실패 (${response.status})`);
-  return payload;
+  const path = `/api/properties/${encodeURIComponent(propertyId)}/media`;
+  const prepared = await call<PreparedMediaJob>(path, {
+    method: "POST",
+    body: JSON.stringify({ action: "prepare", files: files.map((file) => ({ name: file.name, type: file.type, size: file.size })) }),
+  });
+  const storage = browserStorageClient().storage.from(prepared.bucket);
+  for (let index = 0; index < prepared.uploads.length; index += 1) {
+    const upload = prepared.uploads[index];
+    const { error } = await storage.uploadToSignedUrl(upload.path, upload.token, files[index], { contentType: upload.type });
+    if (error) throw new Error(`${upload.name} 원본 전달 실패: ${error.message}`);
+  }
+  await call(path, { method: "POST", body: JSON.stringify({ action: "queue", jobId: prepared.jobId }) });
+
+  for (let attempt = 0; attempt < 600; attempt += 1) {
+    const result = await call<MediaJobStatus>(`${path}?jobId=${encodeURIComponent(prepared.jobId)}`);
+    if (result.status === "succeeded" && result.property) return result.property;
+    if (result.status === "failed") throw new Error(result.error || "Windows 사진 최적화에 실패했습니다.");
+    await new Promise((resolve) => window.setTimeout(resolve, 1000));
+  }
+  throw new Error("Windows 실행기의 사진 최적화 응답 시간이 초과되었습니다.");
 }
 
 function crud<T extends { id: string }>(base: string): CrudRepository<T> {

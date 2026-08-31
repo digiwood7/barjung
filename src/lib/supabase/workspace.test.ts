@@ -77,23 +77,18 @@ describe("workspace 데이터 서비스 (가짜 Supabase)", () => {
     await expect(requestDistribution(ctx, created.id)).rejects.toThrow(/법정 고지 필수값 누락/);
   });
 
-  it("네이버를 먼저 큐에 넣고 완료 후 후속 플랫폼을 배포한다", async () => {
+  it("전체 발행 요청에서 네이버부터 네 플랫폼을 한 작업에 순서대로 큐잉한다", async () => {
     const created = await createProperty(ctx, { ...demoProperties[0], number: "", copies: { naver: "n", instagram: "i", daangn: "d", zigbang: "z" } });
     const queued = await requestDistribution(ctx, created.id);
-    expect(queued.targets.map((t) => t.status)).toEqual(["queued", "not_requested", "not_requested", "not_requested"]);
+    expect(queued.targets.map((t) => t.status)).toEqual(["queued", "queued", "queued", "queued"]);
     expect(db.rows("distribution_jobs")).toHaveLength(1);
+    expect(db.rows("distribution_targets").map((t) => t.platform)).toEqual(["naver", "instagram", "daangn", "zigbang"]);
     expect(db.rows("distribution_targets").every((t) => t.content_draft_id)).toBe(true);
     await expect(requestDistribution(ctx, created.id)).rejects.toThrow(/방금 요청/);
-    await expect(requestDistribution(ctx, created.id, ["instagram"])).rejects.toThrow(/네이버 글/);
-    // 네이버 임시저장이 완료되면 나머지 세 플랫폼 큐가 열린다
-    const target = db.rows("distribution_targets").find((t) => t.platform === "naver")!;
-    target.status = "not_configured"; target.error_code = "draft_saved"; target.error_summary = "네이버 임시저장 완료";
-    const after = await getProperty(ctx, created.id);
-    expect(after?.targets[0]).toMatchObject({ platform: "naver", status: "not_configured", errorCode: "draft_saved", progress: 100 });
-    const followUp = await requestDistribution(ctx, created.id);
-    expect(db.rows("distribution_jobs")).toHaveLength(2);
-    expect(followUp.targets.map((t) => t.status)).toEqual(["not_configured", "queued", "queued", "queued"]);
-    expect(db.rows("distribution_targets").filter((t) => t.distribution_job_id === db.rows("distribution_jobs")[1].id)).toHaveLength(3);
+    const naverDrafts = db.rows("content_drafts").filter((draft) => draft.platform === "naver");
+    const latestNaverDraft = naverDrafts.sort((a, b) => Number(b.version) - Number(a.version))[0];
+    expect(latestNaverDraft.employee_copy).toContain(created.title);
+    expect(latestNaverDraft.employee_copy).toContain("\n\nn");
   });
 
   it("매물 수정은 상태·금액·고지·원고 버전을 갱신하고 삭제는 하위 행까지 지운다", async () => {

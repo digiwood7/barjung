@@ -19,9 +19,9 @@
 5. `start-local.ps1` 로 **데모 모드** 화면을 확인한다(상단 노란 배지 "데모 데이터").
 6. 고객 Supabase 프로젝트를 만들고 `migrate-supabase.ps1 -ProjectRef <REF>` 로 migration + seed 를 적용한다.
 7. `.env.local` 에 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` 를 입력한다.
-8. `start-local.ps1 -WithRunner` 로 관리자와 실행기를 함께 켜고, 상단 배지가 **"고객 DB 연결"**, 왼쪽 실행기 카드가 **온라인**인지 확인한다.
+8. `start-runner.ps1` 로 Windows 실행기만 켜고, `barjeong.vercel.app`의 왼쪽 실행기 카드가 **온라인**인지 확인한다. localhost 웹서버는 필요하지 않다.
 9. 직원관리에서 seed 직원(정다혜·김민지, 전화 `010-0000-000x`)을 실제 직원으로 수정하거나 새로 등록한다.
-10. 매물을 1건 등록하고 → 상세의 사진 업로드 명령으로 사진을 올리고 → 전체 배포를 눌러 4개 플랫폼이 `not_configured` 로 끝나는지 확인한다(어댑터 미연결 상태의 정상 결과).
+10. 매물을 1건 등록하고 사진을 선택해 Windows Python 최적화가 완료되는지 확인한 뒤 → 전체 발행을 눌러 플랫폼이 순서대로 처리되는지 확인한다.
 11. 플랫폼별 Playwright adapter를 headed mode로 연결한다.
 
 ## 연결 여부 점검
@@ -41,8 +41,8 @@ Invoke-RestMethod http://localhost:3000/api/workspace | Select-Object mode, read
 - runner 패키지는 `runner\node_modules`에만 설치한다.
 - Playwright 로그인 profile은 고객이 `BARJUNG_PLAYWRIGHT_PROFILE_DIR`로 지정한 저장소 밖 폴더를 사용한다.
 - 환경파일, profile, 원본 사진, 최적화 임시폴더는 Git에 포함하지 않는다.
-- `SUPABASE_SERVICE_ROLE_KEY` 는 고객 PC 의 로컬 관리자 서버·실행기·Python 업로더만 사용하고 브라우저·Git 에 넣지 않는다.
-- 관리자 인증 전에는 Vercel에 고객 Supabase·공공데이터 키를 넣지 않는다. Vercel의 관리자 API는 코드에서도 403으로 차단된다.
+- `SUPABASE_SERVICE_ROLE_KEY` 는 Vercel 서버와 고객 PC 실행기에서만 사용하고 브라우저·Git 에 넣지 않는다.
+- 브라우저는 publishable key와 서버가 발급한 일회성 signed upload token만 사용한다.
 
 ## 로컬 사진 최적화 예시
 

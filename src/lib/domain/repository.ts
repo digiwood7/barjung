@@ -118,10 +118,7 @@ export function createDemoRepository(seed: DemoSeed): BarjungRepository {
       if (!property) throw new Error("매물을 찾을 수 없습니다.");
       const missing = validateDisclosure(property.disclosure);
       if (missing.length) throw new Error(`법정 고지 필수값 누락: ${missing.join(", ")}`);
-      const naver = property.targets.find((target) => target.platform === "naver");
-      const naverReady = naver?.status === "succeeded" || (naver?.status === "not_configured" && naver.errorCode === "draft_saved");
-      const selected = platforms?.length ? platforms : naverReady ? PLATFORMS.filter((platform) => platform !== "naver") : ["naver"];
-      if (selected.some((platform) => platform !== "naver") && !naverReady) throw new Error("네이버 글을 먼저 완료하세요.");
+      const selected = platforms?.length ? platforms : [...PLATFORMS];
       return properties.update(propertyId, {
         targets: property.targets.map((target) => selected.includes(target.platform) ? { platform: target.platform, status: "queued", progress: 0 } : target),
       });

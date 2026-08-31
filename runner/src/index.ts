@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { createPlatformAdapters } from "./adapters/index.js";
 import { runTargets } from "./jobs/worker.js";
+import { runMediaOptimizationJob, type ClaimedMediaJob } from "./media-jobs.js";
 import { SupabaseRunnerStore, type ClaimedTarget } from "./store.js";
 import type { PublishInput } from "./types.js";
 
@@ -37,6 +38,14 @@ async function updateJobStatus(jobId: string): Promise<void> {
 
 async function tick(): Promise<void> {
   await heartbeat();
+  const { data: mediaData, error: mediaError } = await supabase.rpc("claim_media_optimization_job", { p_agent_id: agentId, p_lease_seconds: 1800 });
+  if (mediaError) throw new Error(`media queue claim failed: ${mediaError.code}`);
+  const mediaJob = Array.isArray(mediaData) ? mediaData[0] as ClaimedMediaJob | undefined : undefined;
+  if (mediaJob) {
+    await runMediaOptimizationJob(supabase, mediaJob);
+    return;
+  }
+
   const { data, error } = await supabase.rpc("claim_distribution_target", { p_agent_id: agentId, p_lease_seconds: 120 });
   if (error) throw new Error(`queue claim failed: ${error.code}`);
   const target = Array.isArray(data) ? data[0] : undefined;
@@ -67,7 +76,7 @@ async function tick(): Promise<void> {
   await updateJobStatus(String(target.distribution_job_id));
 }
 
-console.log("바를정 Windows 실행기를 시작합니다. 비밀값은 출력하지 않습니다.");
+console.log("바를정 Windows 실행기를 시작합니다. 사진 최적화와 플랫폼 발행 큐를 처리합니다.");
 for (;;) {
   try { await tick(); }
   catch (error) { console.error(error instanceof Error ? error.message : "runner error"); }

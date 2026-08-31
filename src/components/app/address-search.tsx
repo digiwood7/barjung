@@ -1,8 +1,8 @@
 "use client";
 
 import Script from "next/script";
-import { Search } from "lucide-react";
-import { useState } from "react";
+import { Search, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 const POSTCODE_SCRIPT = "https://t1.kakaocdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js";
 
@@ -18,7 +18,7 @@ interface PostcodeResult {
 }
 
 interface PostcodeConstructor {
-  new(options: { oncomplete(data: PostcodeResult): void; onclose?(): void }): { open(): void };
+  new(options: { oncomplete(data: PostcodeResult): void; onclose?(): void }): { embed(element: HTMLElement): void };
 }
 
 declare global {
@@ -47,14 +47,14 @@ interface AddressSearchProps {
 export function AddressSearch({ value, onChange, onSelect }: AddressSearchProps) {
   const [scriptReady, setScriptReady] = useState(false);
   const [error, setError] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
 
-  const openSearch = () => {
+  useEffect(() => {
+    if (!searchOpen || !searchContainerRef.current) return;
     const Postcode = window.kakao?.Postcode ?? window.daum?.Postcode;
-    if (!Postcode) {
-      setError("주소 검색 도구를 불러오는 중입니다. 잠시 후 다시 눌러주세요.");
-      return;
-    }
-    setError("");
+    if (!Postcode) return;
+
     new Postcode({
       oncomplete(data) {
         const address = data.userSelectedType === "R"
@@ -70,8 +70,22 @@ export function AddressSearch({ value, onChange, onSelect }: AddressSearchProps)
           buildingName: data.buildingName,
           bcode: data.bcode,
         });
+        setSearchOpen(false);
       },
-    }).open();
+      onclose() {
+        setSearchOpen(false);
+      },
+    }).embed(searchContainerRef.current);
+  }, [searchOpen, onChange, onSelect]);
+
+  const openSearch = () => {
+    const Postcode = window.kakao?.Postcode ?? window.daum?.Postcode;
+    if (!Postcode) {
+      setError("주소 검색 도구를 불러오는 중입니다. 잠시 후 다시 눌러주세요.");
+      return;
+    }
+    setError("");
+    setSearchOpen(true);
   };
 
   return (
@@ -83,6 +97,17 @@ export function AddressSearch({ value, onChange, onSelect }: AddressSearchProps)
       </div>
       {!scriptReady && !error && <small className="address-search-status">국내 주소 검색 도구 준비 중…</small>}
       {error && <small className="address-search-error" role="alert">{error}</small>}
+      {searchOpen && (
+        <div className="address-search-overlay">
+          <div className="address-search-dialog" role="dialog" aria-modal="true" aria-label="주소 검색창">
+            <div className="address-search-head">
+              <strong>주소 검색</strong>
+              <button type="button" className="icon-button" aria-label="주소 검색 닫기" onClick={() => setSearchOpen(false)}><X size={19} /></button>
+            </div>
+            <div className="address-search-embed" ref={searchContainerRef} />
+          </div>
+        </div>
+      )}
     </>
   );
 }
