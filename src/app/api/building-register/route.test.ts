@@ -16,4 +16,18 @@ describe("POST /api/building-register", () => {
     expect(response.status).toBe(401);
     expect(await response.json()).toMatchObject({ code: "AUTH_REQUIRED" });
   });
+
+  it("건축HUB 키가 있어도 지번 코드가 없으면 주소 선택을 요청한다", async () => {
+    vi.stubEnv("VERCEL", "");
+    vi.stubEnv("BUILDING_REGISTER_API_KEY", "building-key");
+    vi.stubEnv("JUSO_API_KEY", "");
+    const response = await POST(new Request("http://localhost/api/building-register", {
+      method: "POST",
+      body: JSON.stringify({ address: "대구광역시 북구 산격동 1240-1" }),
+      headers: { "content-type": "application/json" },
+    }));
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({ code: "ADDRESS_SELECTION_REQUIRED" });
+  });
 });

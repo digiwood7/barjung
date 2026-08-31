@@ -51,13 +51,12 @@ describe("BarjungApp administrator workflows (demo mode)", () => {
     expect(screen.getByText("데모 데이터")).toBeInTheDocument();
   });
 
-  it("marks building-register values as demo when the customer API key is not configured", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ code: "NOT_CONFIGURED", message: "고객 공공데이터 API 키를 연결해야 합니다." }), { status: 503 })));
+  it("requires selecting a Kakao address before building-register lookup", async () => {
     await openApp();
     fireEvent.click(screen.getByRole("button", { name: /매물관리/ }));
     fireEvent.click(screen.getByRole("button", { name: /새 매물 등록/ }));
-    fireEvent.click(screen.getByRole("button", { name: "건축물대장 확인" }));
-    await waitFor(() => expect(screen.getByText(/시안 데이터입니다/)).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "주소 선택 필요" })).toBeDisabled();
+    expect(screen.getByText(/검색 결과를 선택해 주세요/)).toBeInTheDocument();
   });
 
   it("registers a property from the wizard with the typed title", async () => {

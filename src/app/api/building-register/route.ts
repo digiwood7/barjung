@@ -12,8 +12,11 @@ export async function POST(request: Request) {
     const input = await request.json() as AddressLookupInput;
     const apiKey = process.env.BUILDING_REGISTER_API_KEY?.trim() || "";
     const jusoApiKey = process.env.JUSO_API_KEY?.trim() || "";
-    if (!apiKey || (!jusoApiKey && !(input.sigunguCd && input.bjdongCd && input.bun))) {
-      return NextResponse.json({ code: "NOT_CONFIGURED", message: "고객 공공데이터·도로명주소 API 키를 연결해야 합니다." }, { status: 503 });
+    if (!apiKey) {
+      return NextResponse.json({ code: "NOT_CONFIGURED", message: "건축물대장 공공데이터 API 키를 연결해야 합니다." }, { status: 503 });
+    }
+    if (!jusoApiKey && !(input.sigunguCd && input.bjdongCd && input.bun)) {
+      return NextResponse.json({ code: "ADDRESS_SELECTION_REQUIRED", message: "주소 검색 결과를 선택해야 건축물대장을 조회할 수 있습니다." }, { status: 422 });
     }
     const result = await lookupBuildingRegisterByAddress(input, {
       buildingApiKey: apiKey,

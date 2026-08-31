@@ -12,7 +12,7 @@ import { accentFor, areaLabel } from "@/lib/supabase/mappers";
 import { Badge, PlatformLogo, automaticDisclosureKeys, disclosureLabel, platformName } from "./ui";
 import { AddressSearch, type SelectedAddress } from "./address-search";
 
-const steps = ["기본정보", "사진 최적화", "건축물대장", "고지사항", "채널 원고", "등록 확인"];
+const steps = ["기본정보", "사진 최적화", "건축물대장", "고지사항 입력", "채널 원고", "등록 확인"];
 
 const demoDisclosure: LegalDisclosure = { location: "대구광역시 북구 산격동 481-5", contractArea: "79.62㎡", propertyCategory: "다가구주택", transactionType: "월세", floor: "4층 중 2층", availableFrom: "즉시 입주", rooms: "방 1, 욕실 1", approvalDate: "2020. 11. 06.", parking: "총 6대", maintenance: "월 7만원 (수도·인터넷 포함)", direction: "", lotNumberNotice: "중개의뢰인 요청으로 상세 지번 비공개", measurementNotice: "면적은 공부상 면적이며 현장 실측과 차이가 있을 수 있습니다." };
 const liveDisclosure: LegalDisclosure = { location: "", contractArea: "", propertyCategory: "", transactionType: "월세", floor: "", availableFrom: "", rooms: "", approvalDate: "", parking: "", maintenance: "", direction: "", lotNumberNotice: "중개의뢰인 요청으로 상세 지번 비공개", measurementNotice: "면적은 공부상 면적이며 현장 실측과 차이가 있을 수 있습니다." };
@@ -67,11 +67,17 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
   const missing = validateDisclosure(disclosure).map((key) => disclosureLabel[key]);
   const copyCount = PLATFORMS.filter((platform) => copies[platform].trim()).length;
   const basicsReady = title.trim().length > 0 && address.trim().length > 0;
+  const selectedParcel = parcelFromSelectedAddress(selectedAddress);
 
   const lookupRegistry = async () => {
+    const parcel = parcelFromSelectedAddress(selectedAddress);
+    if (!parcel) {
+      setRegistryStatus("failed");
+      setRegistryMessage("주소 검색 버튼을 눌러 카카오 검색 결과에서 정확한 주소를 먼저 선택하세요.");
+      return;
+    }
     setRegistryStatus("loading"); setRegistryMessage("건축물대장을 조회하고 있습니다.");
     try {
-      const parcel = parcelFromSelectedAddress(selectedAddress);
       const response = await fetch("/api/building-register", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ address, ...parcel }) });
       const payload = await response.json() as BuildingRegisterLookupResult & { message?: string };
       if (!response.ok) throw new Error(payload.message || "조회 실패");
@@ -131,7 +137,7 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
             <label>등록 직원<select value={registeredById} onChange={(event) => setRegisteredById(event.target.value)}>{employees.length === 0 && <option value="">직원 미등록</option>}{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name} · {employee.role}</option>)}</select></label>
             <label className="span-2">정확한 주소<AddressSearch value={address} onChange={(value) => { setAddress(value); setSelectedAddress(null); setRegistryStatus("idle"); }} onSelect={selectAddress} /></label>
             <label className="span-2">상세주소<input aria-label="상세주소" value={detailAddress} onChange={(event) => setDetailAddress(event.target.value)} placeholder="동·층·호 등 (내부 전용)" /></label>
-            <div className="address-confirm span-2"><span>{selectedAddress ? `선택 완료 · ${selectedAddress.roadAddress ? "도로명" : "지번"} · ${selectedAddress.zonecode}` : "검색 결과에서 주소를 선택해 주세요."}</span><button type="button" onClick={lookupRegistry} disabled={registryStatus === "loading" || !address.trim()}><Search size={15} /> {registryStatus === "loading" ? "조회 중" : "건축물대장 확인"}</button></div>
+            <div className="address-confirm span-2"><span>{selectedParcel ? `선택 완료 · ${selectedAddress?.roadAddress ? "도로명" : "지번"} · ${selectedAddress?.zonecode}` : "주소 검색 버튼을 눌러 검색 결과를 선택해 주세요."}</span><button type="button" onClick={lookupRegistry} disabled={registryStatus === "loading" || !selectedParcel}><Search size={15} /> {registryStatus === "loading" ? "조회 중" : selectedParcel ? "건축물대장 확인" : "주소 선택 필요"}</button></div>
             <div className="notice span-2"><MapPin size={16} /><div><strong>외부 주소는 플랫폼마다 다르게 공개됩니다.</strong><small>{registryMessage}</small></div></div>
           </div>
         )}
@@ -152,6 +158,7 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
             <div className="registry-search"><Database size={20} /><div><strong>{registryStatus === "live" ? "건축물대장 실조회 완료" : registryStatus === "failed" ? "건축물대장 조회 실패" : demo ? "건축물대장 시안 데이터" : "건축물대장 미조회"}</strong><small>{registryMessage}</small></div><Badge tone={registryStatus === "live" ? "green" : registryStatus === "failed" ? "red" : "amber"}>{registryStatus === "live" ? "실데이터" : registryStatus === "failed" ? "실패" : demo ? "DEMO" : "직접 입력"}</Badge></div>
             <div className="building-choice selected"><span><Building2 size={20} /></span><div><strong>{registry?.address || address || "주소 미입력"}</strong><small>{[disclosure.propertyCategory, disclosure.floor, disclosure.approvalDate && `사용승인 ${disclosure.approvalDate}`].filter(Boolean).join(" · ") || "대장 항목은 다음 단계에서 입력합니다"}</small></div><Check size={18} /></div>
             <div className="auto-fill-note"><Sparkles size={17} /><span>대상물 종류, 건물 층수, 사용승인일, 주차대수를 자동으로 채웁니다. 계약면적·해당 층·방향·관리비는 직원이 확인합니다.</span></div>
+            <div className="registry-manual-action"><span>대장 조회값 외 항목은 다음 단계에서 직접 입력합니다.</span><button type="button" className="secondary" onClick={() => setStep(3)}>고지사항 직접 입력</button></div>
           </div>
         )}
         {step === 3 && (
