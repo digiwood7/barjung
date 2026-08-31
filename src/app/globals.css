@@ -211,3 +211,9 @@ td { height: 82px; font-size: 14px; }
 .connection-info dd{margin:0;word-break:break-all}
 .connection-info code{font:11px ui-monospace,monospace}
 .toast.error{background:var(--red)}
+.admin-login-page{min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 20% 10%,#dfece6 0,transparent 35%),linear-gradient(145deg,#f4f7f5,#e9efec)}
+.admin-login-card{width:min(420px,100%);padding:42px;border:1px solid var(--line);border-radius:22px;background:rgba(255,255,255,.94);box-shadow:0 28px 80px rgba(22,52,43,.14);display:flex;flex-direction:column;gap:14px}
+.admin-login-mark{width:54px;height:54px;border-radius:16px;background:var(--green);color:white;display:grid;place-items:center;font-size:20px;font-weight:900;position:relative}.admin-login-mark span{position:absolute;right:8px;bottom:5px;font-size:12px;color:#bfe4d3}
+.admin-login-card>small{font-size:10px;font-weight:800;letter-spacing:.16em;color:var(--green)}.admin-login-card h1{margin:4px 0 0;font-size:30px}.admin-login-card p{margin:-5px 0 10px;color:var(--muted);font-size:13px}
+.admin-login-card label{display:grid;gap:7px;font-size:12px;font-weight:750;color:var(--ink)}.admin-login-card input{height:46px;border:1px solid var(--line);border-radius:10px;padding:0 13px;background:white;font-size:15px;outline:none}.admin-login-card input:focus{border-color:var(--green);box-shadow:0 0 0 3px var(--green-soft)}
+.admin-login-card button{height:48px;margin-top:4px;display:flex;align-items:center;justify-content:center;gap:8px}.admin-login-card button:disabled{opacity:.65;cursor:wait}.admin-login-error{padding:10px 12px;border-radius:9px;background:var(--red-soft);color:var(--red);font-size:12px}.spin{animation:spin .8s linear infinite}

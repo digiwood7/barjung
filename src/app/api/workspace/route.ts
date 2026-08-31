@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
-import { isRemoteAdminRuntime, liveContext, notConfigured, remoteAccessDisabled } from "@/lib/api/server";
+import { liveContext, notConfigured, requireRemoteAdmin } from "@/lib/api/server";
 import { isReadOnly } from "@/lib/supabase/server";
 import { loadWorkspace } from "@/lib/supabase/workspace";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    if (isRemoteAdminRuntime()) return remoteAccessDisabled();
+    const denied = requireRemoteAdmin(request);
+    if (denied) return denied;
     const ctx = await liveContext();
     if (!ctx) return notConfigured();
     return NextResponse.json(await loadWorkspace(ctx, isReadOnly()));

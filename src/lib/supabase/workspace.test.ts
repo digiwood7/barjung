@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import { FakeSupabase, barjungUniqueKeys } from "@/test/fake-supabase";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { FakeSupabase, barjungUniqueKeys, resetFakeSupabaseClock } from "@/test/fake-supabase";
 import { properties as demoProperties } from "@/lib/mock/data";
 import {
   createCustomer, createEmployee, createProperty, deleteProperty, getProperty, loadWorkspace, nextPropertyNumber,
@@ -25,7 +25,8 @@ function seeded() {
 describe("workspace 데이터 서비스 (가짜 Supabase)", () => {
   let db: FakeSupabase;
   let ctx: WorkspaceContext;
-  beforeEach(() => { db = seeded(); ctx = { client: db.asClient(), officeId: OFFICE, now: NOW }; });
+  beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(NOW); resetFakeSupabaseClock(NOW); db = seeded(); ctx = { client: db.asClient(), officeId: OFFICE, now: NOW }; });
+  afterEach(() => vi.useRealTimers());
 
   it("seed 만 적용된 빈 사업장을 live 스냅샷으로 읽는다", async () => {
     expect(await resolveOfficeId(db.asClient(), {} as NodeJS.ProcessEnv)).toBe(OFFICE);

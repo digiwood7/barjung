@@ -18,6 +18,7 @@ const uuid = () => (typeof globalThis.crypto?.randomUUID === "function" ? crypto
 /** 같은 ms 안의 insert 도 순서가 갈리도록 단조 증가하는 시각 (DB default now() 흉내) */
 let clock = Date.now();
 const nextStamp = () => new Date(++clock).toISOString();
+export function resetFakeSupabaseClock(now: Date | number = Date.now()) { clock = typeof now === "number" ? now : now.getTime(); }
 
 class Query implements PromiseLike<Result> {
   private op: "select" | "insert" | "update" | "delete" | "upsert" = "select";

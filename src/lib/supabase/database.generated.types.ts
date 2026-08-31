@@ -14,6 +14,53 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_users: {
+        Row: {
+          created_at: string
+          failed_attempts: number
+          id: string
+          is_active: boolean
+          last_login_at: string | null
+          locked_until: string | null
+          office_id: string
+          password_hash: string
+          updated_at: string
+          username: string
+        }
+        Insert: {
+          created_at?: string
+          failed_attempts?: number
+          id?: string
+          is_active?: boolean
+          last_login_at?: string | null
+          locked_until?: string | null
+          office_id: string
+          password_hash: string
+          updated_at?: string
+          username: string
+        }
+        Update: {
+          created_at?: string
+          failed_attempts?: number
+          id?: string
+          is_active?: boolean
+          last_login_at?: string | null
+          locked_until?: string | null
+          office_id?: string
+          password_hash?: string
+          updated_at?: string
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_users_office_id_fkey"
+            columns: ["office_id"]
+            isOneToOne: false
+            referencedRelation: "offices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_settings: {
         Row: {
           created_at: string
@@ -884,6 +931,14 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      verify_admin_credentials: {
+        Args: { p_password: string; p_username: string }
+        Returns: {
+          admin_user_id: string
+          office_id: string
+          username: string
+        }[]
       }
     }
     Enums: {

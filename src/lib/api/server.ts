@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient, isReadOnly } from "@/lib/supabase/server";
 import { resolveOfficeId, type WorkspaceContext } from "@/lib/supabase/workspace";
+import { isAdminRequestAuthenticated } from "@/lib/auth/session";
 
 /**
  * Route Handler 공통 진입점.
@@ -17,11 +18,16 @@ export function isRemoteAdminRuntime(env: NodeJS.ProcessEnv = process.env): bool
   return env.VERCEL === "1";
 }
 
-export function remoteAccessDisabled(): NextResponse {
+export function remoteAuthenticationRequired(): NextResponse {
   return NextResponse.json({
-    code: "REMOTE_ACCESS_DISABLED",
-    message: "관리자 인증이 도입되기 전에는 Vercel에서 고객 데이터에 접근할 수 없습니다. 고객 Windows PC의 로컬 관리자에서 사용하세요.",
-  }, { status: 403 });
+    code: "AUTH_REQUIRED",
+    message: "관리자 로그인이 필요합니다.",
+  }, { status: 401 });
+}
+
+export function requireRemoteAdmin(request: Request): NextResponse | null {
+  if (!isRemoteAdminRuntime()) return null;
+  return isAdminRequestAuthenticated(request) ? null : remoteAuthenticationRequired();
 }
 
 export async function liveContext(): Promise<WorkspaceContext | null> {
@@ -38,7 +44,8 @@ export function notConfigured(): NextResponse {
 
 export async function withLive<T>(request: Request, handler: LiveHandler<T>): Promise<NextResponse> {
   try {
-    if (isRemoteAdminRuntime()) return remoteAccessDisabled();
+    const denied = requireRemoteAdmin(request);
+    if (denied) return denied;
     if (request.method !== "GET" && isReadOnly()) {
       return NextResponse.json({ code: "READ_ONLY", message: "현재 조회 전용 모드에서는 저장할 수 없습니다." }, { status: 403 });
     }
