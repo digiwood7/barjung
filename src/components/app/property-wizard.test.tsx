@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PropertyWizard } from "./property-wizard";
 
@@ -141,8 +141,9 @@ describe("PropertyWizard 사진 최적화 단계", () => {
     expect(screen.getByText("㎡")).toBeInTheDocument();
   });
 
-  it("5단계는 자동 원고에 추가할 내용만 안내한다", () => {
-    render(<PropertyWizard mode="live" employees={[]} onClose={() => undefined} onFinish={() => undefined} />);
+  it("5단계는 전체 플랫폼을 기본 선택하고 원하는 플랫폼만 발행한다", async () => {
+    const onFinish = vi.fn();
+    render(<PropertyWizard mode="live" employees={[]} onClose={() => undefined} onFinish={onFinish} />);
     fireEvent.change(screen.getByLabelText("매물 제목"), { target: { value: "원고 테스트" } });
     fireEvent.change(screen.getByLabelText("정확한 주소"), { target: { value: "대구 북구 산격동" } });
     fireEvent.click(screen.getByRole("button", { name: /다음/ }));
@@ -155,6 +156,13 @@ describe("PropertyWizard 사진 최적화 단계", () => {
     }
     fireEvent.click(screen.getByRole("button", { name: /다음/ }));
     expect(screen.getAllByPlaceholderText("자동 작성될 게시글에 직접 추가할 내용이 있으면 적어 주세요.")).toHaveLength(4);
+    for (const name of ["네이버", "인스타", "당근", "직방"]) expect(screen.getByRole("checkbox", { name: `${name} 발행 선택` })).toBeChecked();
+    for (const name of ["인스타", "당근", "직방"]) fireEvent.click(screen.getByRole("checkbox", { name: `${name} 발행 선택` }));
+    expect(screen.getByRole("checkbox", { name: "네이버 발행 선택" })).toBeChecked();
+    expect(screen.getByRole("textbox", { name: "인스타 추가 내용" })).toBeDisabled();
     expect(screen.queryByText("직접 작성")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /다음/ }));
+    fireEvent.click(screen.getByRole("button", { name: "등록 후 선택 플랫폼 발행" }));
+    await waitFor(() => expect(onFinish).toHaveBeenCalledWith(expect.any(Object), [], ["naver"]));
   });
 });

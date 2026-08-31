@@ -44,6 +44,7 @@ interface PropertyWizardDraft {
   registeredById: string;
   disclosure: LegalDisclosure;
   copies: Record<Platform, string>;
+  selectedPlatforms?: Platform[];
   registryStatus: RegistryStatus;
   registryMessage: string;
   registry: BuildingRegisterLookupResult | null;
@@ -67,7 +68,7 @@ interface PropertyWizardProps {
   mode: WorkspaceMode;
   employees: Employee[];
   onClose: () => void;
-  onFinish: (input: NewRecord<Property>, photos: File[]) => Promise<void> | void;
+  onFinish: (input: NewRecord<Property>, photos: File[], platforms: Platform[]) => Promise<void> | void;
 }
 
 function parcelFromSelectedAddress(selected: SelectedAddress | null): Omit<ParcelAddressInput, "address"> | null {
@@ -102,6 +103,7 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
   const [registeredById, setRegisteredById] = useState(activeEmployees[0]?.id ?? employees[0]?.id ?? "");
   const [disclosure, setDisclosure] = useState<LegalDisclosure>(demo ? demoDisclosure : liveDisclosure);
   const [copies, setCopies] = useState<Record<Platform, string>>(demo ? demoCopies : emptyCopies);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([...PLATFORMS]);
   const [registryStatus, setRegistryStatus] = useState<RegistryStatus>("idle");
   const [registryMessage, setRegistryMessage] = useState("주소 확인 버튼을 누르면 공공데이터 API로 조회합니다.");
   const [registry, setRegistry] = useState<BuildingRegisterLookupResult | null>(null);
@@ -125,18 +127,17 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
     }
     const payload: PropertyWizardDraft = {
       version: 1, step, title, type, deposit, rent, maintenance, address, detailAddress, selectedAddress, registeredById,
-      disclosure, copies, registryStatus: registryStatus === "loading" ? "idle" : registryStatus,
+      disclosure, copies, selectedPlatforms, registryStatus: registryStatus === "loading" ? "idle" : registryStatus,
       registryMessage, registry, hadPhotos: photos.length > 0 || photoRestoreNotice,
     };
     window.localStorage.setItem(PROPERTY_DRAFT_KEY, JSON.stringify(payload));
   };
 
-  useEffect(() => { saveDraft(); }, [step, title, type, deposit, rent, maintenance, address, detailAddress, selectedAddress, registeredById, disclosure, copies, registryStatus, registryMessage, registry, photos, photoRestoreNotice, draftReady]);
+  useEffect(() => { saveDraft(); }, [step, title, type, deposit, rent, maintenance, address, detailAddress, selectedAddress, registeredById, disclosure, copies, selectedPlatforms, registryStatus, registryMessage, registry, photos, photoRestoreNotice, draftReady]);
 
   useEffect(() => { if (step !== 1 || optimize >= 100) return; const timer = window.setInterval(() => setOptimize((v) => Math.min(100, v + 4)), 70); return () => window.clearInterval(timer); }, [step, optimize]);
 
   const missing = validateDisclosure(disclosure).map((key) => disclosureLabel[key]);
-  const copyCount = PLATFORMS.filter((platform) => copies[platform].trim()).length;
   const basicsReady = title.trim().length > 0 && address.trim().length > 0;
   const selectedParcel = parcelFromSelectedAddress(selectedAddress);
 
@@ -217,6 +218,7 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
       maintenance: maintenanceDisclosure(recoveryDraft.maintenance),
     });
     setCopies({ ...emptyCopies, ...recoveryDraft.copies });
+    setSelectedPlatforms(recoveryDraft.selectedPlatforms?.length ? PLATFORMS.filter((platform) => recoveryDraft.selectedPlatforms?.includes(platform)) : [...PLATFORMS]);
     setRegistry(recoveryDraft.registry);
     setRegistryStatus(recoveryDraft.registryStatus === "loading" ? "idle" : recoveryDraft.registryStatus);
     setRegistryMessage(recoveryDraft.registryMessage);
@@ -249,7 +251,7 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
     };
     setSaving(true); setSaveError("");
     try {
-      await onFinish(input, photos);
+      await onFinish(input, photos, selectedPlatforms);
       if (typeof window !== "undefined") window.localStorage.removeItem(PROPERTY_DRAFT_KEY);
     }
     catch (error) { setSaveError(error instanceof Error ? error.message : "매물을 저장하지 못했습니다."); }
@@ -306,14 +308,14 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
           </div>
         )}
         {step === 4 && (
-          <div className="copy-grid">{PLATFORMS.map((platform) => <div className="copy-card" key={platform}><div><PlatformLogo platform={platform} compact /><strong>{platformName[platform]}</strong><Badge tone="blue">추가 내용</Badge></div><textarea aria-label={`${platformName[platform]} 추가 내용`} value={copies[platform]} onChange={(event) => setCopies((current) => ({ ...current, [platform]: event.target.value }))} placeholder="자동 작성될 게시글에 직접 추가할 내용이 있으면 적어 주세요." /><small><ShieldCheck size={12} /> 매물 정보와 검증된 법정 고지는 게시글에 자동으로 포함됩니다.</small></div>)}</div>
+          <div><div className="platform-selection-head"><div><strong>발행할 플랫폼 선택</strong><small>기본은 전체 선택입니다. 한 개 이상 선택하세요.</small></div><label><input type="checkbox" aria-label="플랫폼 전체 선택" checked={selectedPlatforms.length === PLATFORMS.length} onChange={(event) => setSelectedPlatforms(event.target.checked ? [...PLATFORMS] : [])} /> 전체 선택</label></div><div className="copy-grid">{PLATFORMS.map((platform) => { const selected = selectedPlatforms.includes(platform); return <div className={`copy-card ${selected ? "selected" : "disabled"}`} key={platform}><div><label className="platform-check"><input type="checkbox" aria-label={`${platformName[platform]} 발행 선택`} checked={selected} onChange={(event) => setSelectedPlatforms((current) => event.target.checked ? PLATFORMS.filter((item) => item === platform || current.includes(item)) : current.filter((item) => item !== platform))} /><PlatformLogo platform={platform} compact /><strong>{platformName[platform]}</strong></label><Badge tone={selected ? "blue" : "slate"}>{selected ? "발행" : "선택 안 함"}</Badge></div><textarea disabled={!selected} aria-label={`${platformName[platform]} 추가 내용`} value={copies[platform]} onChange={(event) => setCopies((current) => ({ ...current, [platform]: event.target.value }))} placeholder={selected ? "자동 작성될 게시글에 직접 추가할 내용이 있으면 적어 주세요." : "발행하려면 플랫폼을 선택하세요."} /><small><ShieldCheck size={12} /> 매물 정보와 검증된 법정 고지는 게시글에 자동으로 포함됩니다.</small></div>; })}</div>{selectedPlatforms.length === 0 && <div className="error-guide"><CircleAlert size={17} /><span>발행할 플랫폼을 한 개 이상 선택하세요.</span></div>}</div>
         )}
         {step === 5 && (
           <div className="review-card">
             <div className="review-icon"><Check size={28} /></div>
             <h3>매물 등록 준비가 끝났습니다</h3>
             <p>{demo ? "최적화 사진 10장, 건축물대장 조회값, 직원 추가 내용을 저장합니다." : "매물 저장 후 Windows 실행기가 사진을 Python으로 최적화하고 전체 발행을 시작합니다."}</p>
-            <div className="review-summary"><span><ImageIcon size={16} /> 사진 <strong>{demo ? "6.8MB" : `${photos.length}장`}</strong></span><span><FileCheck2 size={16} /> 고지사항 <strong>{13 - missing.length}/13</strong></span><span><MessageSquareText size={16} /> 추가 내용 <strong>{copyCount}개</strong></span></div>
+            <div className="review-summary"><span><ImageIcon size={16} /> 사진 <strong>{demo ? "6.8MB" : `${photos.length}장`}</strong></span><span><FileCheck2 size={16} /> 고지사항 <strong>{13 - missing.length}/13</strong></span><span><MessageSquareText size={16} /> 발행 플랫폼 <strong>{selectedPlatforms.length}개</strong></span></div>
             <div className="notice"><FileCheck2 size={17} /><div><strong>현재 검수 후 배포 모드입니다.</strong><small>등록 후 매물 상세에서 원고를 확인하고 전체 배포를 실행합니다.</small></div></div>
             {saveError && <div className="error-guide"><CircleAlert size={17} /><span>{saveError}</span></div>}
           </div>
@@ -324,8 +326,8 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
         <div>
           <span>{step + 1} / {steps.length}</span>
           {step < steps.length - 1
-            ? <button className="primary" disabled={(step === 0 && !basicsReady) || (step === 1 && optimize < 100) || (step === 3 && missing.length > 0)} onClick={() => setStep(step + 1)}>다음 <ArrowRight size={16} /></button>
-            : <button className="primary" disabled={saving} onClick={finish}><Check size={16} /> {saving ? "사진 최적화·저장 중" : demo ? "매물 등록" : "등록 후 전체 발행"}</button>}
+            ? <button className="primary" disabled={(step === 0 && !basicsReady) || (step === 1 && optimize < 100) || (step === 3 && missing.length > 0) || (step === 4 && selectedPlatforms.length === 0)} onClick={() => setStep(step + 1)}>다음 <ArrowRight size={16} /></button>
+            : <button className="primary" disabled={saving || selectedPlatforms.length === 0} onClick={finish}><Check size={16} /> {saving ? "사진 최적화·저장 중" : demo ? "매물 등록" : "등록 후 선택 플랫폼 발행"}</button>}
         </div>
       </div>
     </div></div>

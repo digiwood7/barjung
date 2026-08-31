@@ -91,6 +91,13 @@ describe("workspace 데이터 서비스 (가짜 Supabase)", () => {
     expect(latestNaverDraft.employee_copy).toContain("\n\nn");
   });
 
+  it("선택한 플랫폼만 순서를 유지해 배포 대상으로 만든다", async () => {
+    const created = await createProperty(ctx, { ...demoProperties[0], number: "", copies: { naver: "n", instagram: "i", daangn: "d", zigbang: "z" } });
+    const queued = await requestDistribution(ctx, created.id, ["instagram", "zigbang"]);
+    expect(queued.targets.map((target) => target.status)).toEqual(["not_requested", "queued", "not_requested", "queued"]);
+    expect(db.rows("distribution_targets").map((target) => target.platform)).toEqual(["instagram", "zigbang"]);
+  });
+
   it("매물 수정은 상태·금액·고지·원고 버전을 갱신하고 삭제는 하위 행까지 지운다", async () => {
     const created = await createProperty(ctx, { ...demoProperties[0], number: "", employeeCopy: "첫 원고" });
     const updated = await updateProperty(ctx, created.id, { status: "광고 중", rent: 45, disclosure: { ...created.disclosure, direction: "" }, employeeCopy: "둘째 원고" });

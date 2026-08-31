@@ -101,10 +101,10 @@ Invoke-RestMethod http://localhost:3000/api/workspace | Select-Object mode, read
 
 ## 배포 흐름
 
-1. 매물 상세에서 법정 고지 13개가 모두 채워져야 **전체 발행** 버튼이 켜집니다.
-2. 누르면 `distribution_jobs` 1건과 플랫폼별 `distribution_targets` 4건이 `queued` 로 생성됩니다(같은 매물을 1분 안에 다시 요청하면 거부).
+1. 새 매물 등록 5단계에서 네이버·인스타·당근·직방 중 발행할 플랫폼을 체크합니다. 기본은 4개 전체 선택이며 한 개 이상만 선택해도 됩니다.
+2. 등록하면 `distribution_jobs` 1건과 선택한 플랫폼의 `distribution_targets`만 `queued`로 생성됩니다(같은 조합을 1분 안에 다시 요청하면 거부).
 3. Windows 실행기가 네이버 → 인스타그램 → 당근 → 직방 순서로 하나씩 실행하고 결과(`succeeded`/`failed`/`not_configured`, 게시 URL, 오류 요약)를 기록합니다. 화면은 플랫폼별 진행률과 완료 상태를 보여 줍니다.
-4. 실패·미연결 플랫폼은 "다시 확인" 으로 그 플랫폼만 재요청할 수 있습니다.
+4. 한 플랫폼이 실패해도 나머지는 끝까지 처리합니다. 완료 화면에서 실패 사유를 확인하고 **이 플랫폼 재발행**으로 실패한 대상만 다시 요청할 수 있습니다.
 5. 네이버 블로그 어댑터는 이식돼 있고(`BARJUNG_NAVER_ENABLED=true` 로 켬, 기본은 임시저장 모드), 인스타·당근·직방은 아직 `not_configured` 입니다. 현장 연결 순서는 [플랫폼 어댑터 가이드](docs/PLATFORM_ADAPTER_GUIDE.md)를 따릅니다.
 
 ## 네이버 블로그 게시
