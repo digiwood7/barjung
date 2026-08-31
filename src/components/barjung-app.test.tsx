@@ -56,7 +56,7 @@ describe("BarjungApp administrator workflows (demo mode)", () => {
     await openApp();
     fireEvent.click(screen.getByRole("button", { name: /매물관리/ }));
     fireEvent.click(screen.getByRole("button", { name: /새 매물 등록/ }));
-    fireEvent.click(screen.getByRole("button", { name: "주소 확인" }));
+    fireEvent.click(screen.getByRole("button", { name: "건축물대장 확인" }));
     await waitFor(() => expect(screen.getByText(/시안 데이터입니다/)).toBeInTheDocument());
   });
 

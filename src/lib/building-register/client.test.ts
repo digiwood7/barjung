@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { lookupBuildingRegister, mapBuildingTitle, normalizeLotNumber, resolveParcelAddress, validateParcelAddress } from "./client";
+import { lookupBuildingRegister, mapBuildingTitle, normalizeLotNumber, normalizeServiceKey, resolveParcelAddress, validateParcelAddress } from "./client";
 
 describe("building register client", () => {
   it("validates and normalizes official parcel parameters", () => {
@@ -7,6 +7,11 @@ describe("building register client", () => {
     expect(normalizeLotNumber(undefined)).toBe("0000");
     expect(() => validateParcelAddress({ address: "산격동 481-5", sigunguCd: "27230", bjdongCd: "11100", bun: "481", ji: "5" })).not.toThrow();
     expect(() => validateParcelAddress({ address: "산격동", sigunguCd: "27", bjdongCd: "11100", bun: "481" })).toThrow("시군구코드");
+  });
+
+  it("accepts either data.go.kr encoding-key format", () => {
+    expect(normalizeServiceKey("abc%2Fdef%3D")).toBe("abc/def=");
+    expect(normalizeServiceKey("\"abc/def=\"")).toBe("abc/def=");
   });
 
   it("maps only authoritative title fields and labels total area correctly", () => {
@@ -21,6 +26,11 @@ describe("building register client", () => {
     expect(result.disclosure.parking).toBe("총 6대");
     expect(result.buildingArea).toBe("79.62㎡ (건축물 연면적)");
     expect(result).not.toHaveProperty("disclosure.contractArea");
+  });
+
+  it("uses the queried parcel when a valid result omits a management PK", () => {
+    const result = mapBuildingTitle({ platPlc: "대구광역시 북구 산격동 481-5" }, "2026-08-30T00:00:00.000Z", "27230-11100-0-0481-0005");
+    expect(result.managementId).toBe("27230-11100-0-0481-0005");
   });
 
   it("resolves a typed address into the parcel codes required by Building HUB", async () => {

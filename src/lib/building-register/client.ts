@@ -8,6 +8,20 @@ import type {
 const codePattern = /^\d{5}$/;
 const lotPattern = /^\d{1,4}$/;
 
+/**
+ * data.go.kr displays both an Encoding key and a Decoding key. URLSearchParams
+ * encodes query values itself, so normalize an Encoding key once before it is
+ * attached to a request. This keeps either portal copy format usable.
+ */
+export function normalizeServiceKey(value: string): string {
+  const key = value.trim().replace(/^['"]|['"]$/g, "");
+  try {
+    return key.includes("%") ? decodeURIComponent(key) : key;
+  } catch {
+    return key;
+  }
+}
+
 function requiredText(value: unknown, label: string): string {
   const text = typeof value === "string" ? value.trim() : "";
   if (!text) throw new Error(`${label} 값이 없습니다.`);
@@ -40,7 +54,7 @@ export async function resolveParcelAddress(
   requiredText(address, "주소");
   if (!options.apiKey.trim()) throw new Error("JUSO_API_KEY 환경변수가 필요합니다.");
   const url = new URL(options.baseUrl || "https://business.juso.go.kr/addrlink/addrLinkApi.do");
-  url.searchParams.set("confmKey", options.apiKey);
+  url.searchParams.set("confmKey", normalizeServiceKey(options.apiKey));
   url.searchParams.set("currentPage", "1");
   url.searchParams.set("countPerPage", "10");
   url.searchParams.set("keyword", address);
@@ -77,6 +91,7 @@ function formatApprovalDate(value: string | undefined): string {
 export function mapBuildingTitle(
   item: BuildingRegisterTitleItem,
   queriedAt = new Date().toISOString(),
+  fallbackManagementId = "",
 ): BuildingRegisterLookupResult {
   const above = toCount(item.grndFlrCnt);
   const below = toCount(item.ugrndFlrCnt);
@@ -87,7 +102,9 @@ export function mapBuildingTitle(
   return {
     source: "MOLIT_BUILDING_HUB",
     queriedAt,
-    managementId: requiredText(item.mgmBldrgstPk, "관리건축물대장PK"),
+    // Some valid title records omit the management PK. Preserve a stable
+    // parcel-derived identifier in that case instead of discarding the record.
+    managementId: String(item.mgmBldrgstPk ?? "").trim() || requiredText(fallbackManagementId, "관리건축물대장PK"),
     address: location,
     roadAddress: item.newPlatPlc?.trim() || "",
     buildingName: item.bldNm?.trim() || "",
@@ -118,7 +135,7 @@ export async function lookupBuildingRegister(
   if (!options.apiKey.trim()) throw new Error("BUILDING_REGISTER_API_KEY 환경변수가 필요합니다.");
 
   const url = new URL(`${(options.baseUrl || "https://apis.data.go.kr/1613000/BldRgstHubService").replace(/\/$/, "")}/getBrTitleInfo`);
-  url.searchParams.set("serviceKey", options.apiKey);
+  url.searchParams.set("serviceKey", normalizeServiceKey(options.apiKey));
   url.searchParams.set("sigunguCd", input.sigunguCd);
   url.searchParams.set("bjdongCd", input.bjdongCd);
   url.searchParams.set("platGbCd", input.platGbCd || "0");
@@ -138,7 +155,8 @@ export async function lookupBuildingRegister(
   const items = payload.response?.body?.items?.item;
   const first = Array.isArray(items) ? items[0] : items;
   if (!first) throw new Error("해당 주소의 건축물대장을 찾지 못했습니다.");
-  return mapBuildingTitle(first);
+  const fallbackManagementId = [input.sigunguCd, input.bjdongCd, input.platGbCd || "0", normalizeLotNumber(input.bun), normalizeLotNumber(input.ji)].join("-");
+  return mapBuildingTitle(first, new Date().toISOString(), fallbackManagementId);
 }
 
 export async function lookupBuildingRegisterByAddress(

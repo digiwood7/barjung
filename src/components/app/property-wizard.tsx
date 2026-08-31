@@ -3,12 +3,14 @@
 import { Activity, ArrowRight, Building2, Check, CircleAlert, Database, FileCheck2, ImageIcon, MapPin, MessageSquareText, Search, ShieldCheck, Sparkles, Upload, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { BuildingRegisterLookupResult } from "@/lib/building-register/types";
+import type { ParcelAddressInput } from "@/lib/building-register/types";
 import { validateDisclosure } from "@/lib/domain/legal-disclosure";
 import type { NewRecord } from "@/lib/domain/repository";
 import { PLATFORMS } from "@/lib/domain/types";
 import type { Employee, LegalDisclosure, Platform, Property, PropertyKind, WorkspaceMode } from "@/lib/domain/types";
 import { accentFor, areaLabel } from "@/lib/supabase/mappers";
 import { Badge, PlatformLogo, automaticDisclosureKeys, disclosureLabel, platformName } from "./ui";
+import { AddressSearch, type SelectedAddress } from "./address-search";
 
 const steps = ["기본정보", "사진 최적화", "건축물대장", "고지사항", "채널 원고", "등록 확인"];
 
@@ -24,6 +26,19 @@ interface PropertyWizardProps {
   onFinish: (input: NewRecord<Property>) => Promise<void> | void;
 }
 
+function parcelFromSelectedAddress(selected: SelectedAddress | null): Omit<ParcelAddressInput, "address"> | null {
+  if (!selected || !/^\d{10}$/.test(selected.bcode)) return null;
+  const lot = selected.jibunAddress.match(/(?:^|\s)(산\s*)?(\d+)(?:-(\d+))?\s*$/);
+  if (!lot) return null;
+  return {
+    sigunguCd: selected.bcode.slice(0, 5),
+    bjdongCd: selected.bcode.slice(5),
+    platGbCd: lot[1] ? "1" : "0",
+    bun: lot[2],
+    ji: lot[3] || "0",
+  };
+}
+
 export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyWizardProps) {
   const demo = mode === "demo";
   const activeEmployees = useMemo(() => employees.filter((employee) => employee.status === "재직"), [employees]);
@@ -35,6 +50,8 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
   const [rent, setRent] = useState(demo ? "42" : "");
   const [maintenance, setMaintenance] = useState(demo ? "7" : "");
   const [address, setAddress] = useState(demo ? "대구광역시 북구 산격동 481-5" : "");
+  const [detailAddress, setDetailAddress] = useState("");
+  const [selectedAddress, setSelectedAddress] = useState<SelectedAddress | null>(null);
   const [registeredById, setRegisteredById] = useState(activeEmployees[0]?.id ?? employees[0]?.id ?? "");
   const [disclosure, setDisclosure] = useState<LegalDisclosure>(demo ? demoDisclosure : liveDisclosure);
   const [copies, setCopies] = useState<Record<Platform, string>>(demo ? demoCopies : emptyCopies);
@@ -53,7 +70,8 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
   const lookupRegistry = async () => {
     setRegistryStatus("loading"); setRegistryMessage("건축물대장을 조회하고 있습니다.");
     try {
-      const response = await fetch("/api/building-register", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ address }) });
+      const parcel = parcelFromSelectedAddress(selectedAddress);
+      const response = await fetch("/api/building-register", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ address, ...parcel }) });
       const payload = await response.json() as BuildingRegisterLookupResult & { message?: string };
       if (!response.ok) throw new Error(payload.message || "조회 실패");
       setRegistry(payload);
@@ -71,11 +89,20 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
     }
   };
 
+  const selectAddress = (result: SelectedAddress) => {
+    setSelectedAddress(result);
+    setDetailAddress("");
+    setRegistry(null);
+    setRegistryStatus("idle");
+    setRegistryMessage(`우편번호 ${result.zonecode}${result.buildingName ? ` · ${result.buildingName}` : ""} — 상세주소를 입력한 뒤 건축물대장을 확인하세요.`);
+    setDisclosure((current) => ({ ...current, location: result.roadAddress || result.address }));
+  };
+
   const finish = async () => {
     const employee = employees.find((item) => item.id === registeredById) ?? null;
     const input: NewRecord<Property> = {
       number: "", title: title.trim(), type, status: "검토 완료", area: areaLabel(disclosure.location || address),
-      exactAddress: address.trim(), publicAddress: disclosure.location || address.trim(),
+      exactAddress: [address.trim(), detailAddress.trim()].filter(Boolean).join(" "), publicAddress: disclosure.location || address.trim(),
       deposit: Number(deposit) || 0, rent: Number(rent) || 0, maintenance: Number(maintenance) || 0,
       registeredBy: employee?.name ?? "미지정", registeredById: employee?.id ?? null, createdAt: "방금 전",
       photos: demo ? 10 : 0, accent: accentFor(`${title}${address}${Date.now()}`), employeeCopy: copies.naver, copies: { ...copies }, disclosure,
@@ -101,7 +128,9 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
             <label>월세 (만원)<input inputMode="numeric" value={rent} onChange={(event) => setRent(event.target.value.replace(/[^\d]/g, ""))} /></label>
             <label>관리비 (만원)<input inputMode="numeric" value={maintenance} onChange={(event) => setMaintenance(event.target.value.replace(/[^\d]/g, ""))} /></label>
             <label>등록 직원<select value={registeredById} onChange={(event) => setRegisteredById(event.target.value)}>{employees.length === 0 && <option value="">직원 미등록</option>}{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name} · {employee.role}</option>)}</select></label>
-            <label className="span-2">정확한 주소<div className="input-action"><input aria-label="정확한 주소" value={address} onChange={(event) => { setAddress(event.target.value); setRegistryStatus("idle"); }} placeholder="도로명 또는 지번 주소" /><button type="button" onClick={lookupRegistry} disabled={registryStatus === "loading" || !address.trim()}><Search size={15} /> {registryStatus === "loading" ? "조회 중" : "주소 확인"}</button></div></label>
+            <label className="span-2">정확한 주소<AddressSearch value={address} onChange={(value) => { setAddress(value); setSelectedAddress(null); setRegistryStatus("idle"); }} onSelect={selectAddress} /></label>
+            <label className="span-2">상세주소<input aria-label="상세주소" value={detailAddress} onChange={(event) => setDetailAddress(event.target.value)} placeholder="동·층·호 등 (내부 전용)" /></label>
+            <div className="address-confirm span-2"><span>{selectedAddress ? `선택 완료 · ${selectedAddress.roadAddress ? "도로명" : "지번"} · ${selectedAddress.zonecode}` : "검색 결과에서 주소를 선택해 주세요."}</span><button type="button" onClick={lookupRegistry} disabled={registryStatus === "loading" || !address.trim()}><Search size={15} /> {registryStatus === "loading" ? "조회 중" : "건축물대장 확인"}</button></div>
             <div className="notice span-2"><MapPin size={16} /><div><strong>외부 주소는 플랫폼마다 다르게 공개됩니다.</strong><small>{registryMessage}</small></div></div>
           </div>
         )}

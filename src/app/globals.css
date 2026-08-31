@@ -123,6 +123,7 @@ main { min-height: 100vh; margin-left: 256px; }
 .search-field input,
 .filters select, .form-grid select, .form-grid input, .legal-form input,
 .simple-form input, .simple-form select, .simple-form textarea, .address-settings select { font-size: 14px; }
+.address-search-status,.address-search-error{display:block;margin-top:6px;font-size:11px}.address-search-status{color:var(--muted)}.address-search-error{color:var(--red)}.address-confirm{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);font-size:11px;color:var(--muted)}.address-confirm button{height:34px;border:0;border-radius:7px;padding:0 12px;background:var(--ink);color:white;display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap}.address-confirm button:disabled{opacity:.5;cursor:not-allowed}
 .table-meta, th { font-size: 12px; }
 td { height: 82px; font-size: 14px; }
 .property-cell small { font-size: 11px; }
