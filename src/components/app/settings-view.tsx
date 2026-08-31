@@ -53,6 +53,7 @@ export function SettingsView({ settings, agent, office, mode, properties, onUpda
   };
 
   const naverConnected = naverStatus === "connected";
+  const naverLocalOnly = naverStatus === "local_required";
   return (
     <div className="view-stack">
       <section className="page-heading"><div><span className="eyebrow">WORKSPACE SETTINGS</span><h1>운영 설정</h1><p>배포 방식과 플랫폼별 주소 공개 범위를 설정합니다.</p></div></section>
@@ -76,8 +77,8 @@ export function SettingsView({ settings, agent, office, mode, properties, onUpda
           )}
         </div>
         <div className="panel setting-card span-2 naver-session-card">
-          <div className={`setting-icon ${naverConnected ? "green" : naverStatus === "checking" ? "blue" : "red"}`}><span className="platform-logo naver">N</span></div>
-          <div><h3>네이버 블로그 로그인</h3><p>{naverMessage}</p><Badge tone={naverConnected ? "green" : naverStatus === "checking" || naverStatus === "local_required" ? "amber" : "red"}><span className={`live-dot ${naverConnected ? "online" : naverStatus === "checking" ? "degraded" : "offline"}`} /> {naverConnected ? "로그인 유지 중" : naverStatus === "checking" ? "확인 중" : "재로그인 필요"}</Badge></div>
+          <div className={`setting-icon ${naverConnected ? "green" : naverStatus === "checking" || naverLocalOnly ? "blue" : "red"}`}><span className="platform-logo naver">N</span></div>
+          <div><h3>네이버 블로그 로그인</h3><p>{naverMessage}</p><Badge tone={naverConnected ? "green" : naverStatus === "checking" || naverLocalOnly ? "amber" : "red"}><span className={`live-dot ${naverConnected ? "online" : naverStatus === "checking" || naverLocalOnly ? "degraded" : "offline"}`} /> {naverConnected ? "로그인 유지 중" : naverLocalOnly ? "로컬 PC에서 확인" : naverStatus === "checking" ? "확인 중" : "재로그인 필요"}</Badge></div>
           <div className="naver-session-actions">
             <button className="secondary" onClick={() => checkNaver()} disabled={naverBusy || naverStatus === "checking"}><RefreshCcw size={14} /> 상태 확인</button>
             {!naverConnected && naverStatus !== "local_required" && <button className="primary" onClick={openNaverLogin} disabled={naverBusy}>{naverBusy ? "여는 중" : "네이버 재로그인"}</button>}
