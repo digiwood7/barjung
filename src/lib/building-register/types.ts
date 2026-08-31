@@ -12,6 +12,11 @@ export interface ParcelAddressInput {
 export type AddressLookupInput = Pick<ParcelAddressInput, "address"> & Partial<Omit<ParcelAddressInput, "address">>;
 
 export interface BuildingRegisterTitleItem {
+  sigunguCd?: string;
+  bjdongCd?: string;
+  platGbCd?: string;
+  bun?: string;
+  ji?: string;
   mgmBldrgstPk?: string;
   platPlc?: string;
   newPlatPlc?: string;

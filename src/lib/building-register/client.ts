@@ -88,6 +88,20 @@ function formatApprovalDate(value: string | undefined): string {
   return digits.length === 8 ? `${digits.slice(0, 4)}. ${digits.slice(4, 6)}. ${digits.slice(6, 8)}.` : (value?.trim() || "확인 필요");
 }
 
+function assertReturnedParcelMatches(item: BuildingRegisterTitleItem, input: ParcelAddressInput): void {
+  const comparisons: Array<[string | undefined, string]> = [
+    [item.sigunguCd, input.sigunguCd],
+    [item.bjdongCd, input.bjdongCd],
+    [item.platGbCd, input.platGbCd || "0"],
+    [item.bun, normalizeLotNumber(input.bun)],
+    [item.ji, normalizeLotNumber(input.ji)],
+  ];
+  const mismatch = comparisons.some(([returned, expected]) => returned !== undefined
+    && returned.trim() !== ""
+    && returned.trim().padStart(expected.length, "0") !== expected);
+  if (mismatch) throw new Error("건축물대장 조회 결과가 선택한 지번과 일치하지 않습니다. 주소를 다시 선택하세요.");
+}
+
 export function mapBuildingTitle(
   item: BuildingRegisterTitleItem,
   queriedAt = new Date().toISOString(),
@@ -95,8 +109,9 @@ export function mapBuildingTitle(
 ): BuildingRegisterLookupResult {
   const above = toCount(item.grndFlrCnt);
   const below = toCount(item.ugrndFlrCnt);
-  const parking = toCount(item.indrMechUtcnt) + toCount(item.oudrMechUtcnt)
-    + toCount(item.indrAutoUtcnt) + toCount(item.oudrAutoUtcnt);
+  const parkingValues = [item.indrMechUtcnt, item.oudrMechUtcnt, item.indrAutoUtcnt, item.oudrAutoUtcnt];
+  const hasParkingData = parkingValues.some((value) => value !== undefined && String(value).trim() !== "");
+  const parking = parkingValues.reduce<number>((sum, value) => sum + toCount(value), 0);
   const location = requiredText(item.platPlc || item.newPlatPlc, "대지위치");
 
   return {
@@ -114,7 +129,7 @@ export function mapBuildingTitle(
       propertyCategory: item.etcPurps?.trim() || item.mainPurpsCdNm?.trim() || "확인 필요",
       floor: `지상 ${above}층${below > 0 ? ` / 지하 ${below}층` : ""}`,
       approvalDate: formatApprovalDate(item.useAprDay),
-      parking: `총 ${parking}대`,
+      parking: hasParkingData ? `총 ${parking}대` : "",
     },
     raw: item,
   };
@@ -155,6 +170,7 @@ export async function lookupBuildingRegister(
   const items = payload.response?.body?.items?.item;
   const first = Array.isArray(items) ? items[0] : items;
   if (!first) throw new Error("해당 주소의 건축물대장을 찾지 못했습니다.");
+  assertReturnedParcelMatches(first, input);
   const fallbackManagementId = [input.sigunguCd, input.bjdongCd, input.platGbCd || "0", normalizeLotNumber(input.bun), normalizeLotNumber(input.ji)].join("-");
   return mapBuildingTitle(first, new Date().toISOString(), fallbackManagementId);
 }

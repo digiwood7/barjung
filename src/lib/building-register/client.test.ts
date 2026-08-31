@@ -31,6 +31,12 @@ describe("building register client", () => {
   it("uses the queried parcel when a valid result omits a management PK", () => {
     const result = mapBuildingTitle({ platPlc: "대구광역시 북구 산격동 481-5" }, "2026-08-30T00:00:00.000Z", "27230-11100-0-0481-0005");
     expect(result.managementId).toBe("27230-11100-0-0481-0005");
+    expect(result.disclosure.parking).toBe("");
+  });
+
+  it("distinguishes an explicit zero parking count from missing parking data", () => {
+    const result = mapBuildingTitle({ mgmBldrgstPk: "PK-0", platPlc: "대구 북구 산격동 1", indrAutoUtcnt: "0", oudrAutoUtcnt: "0" });
+    expect(result.disclosure.parking).toBe("총 0대");
   });
 
   it("resolves a typed address into the parcel codes required by Building HUB", async () => {
@@ -68,5 +74,17 @@ describe("building register client", () => {
     const calledUrl = String(fetcher.mock.calls[0]?.[0]);
     expect(calledUrl).toContain("getBrTitleInfo");
     expect(calledUrl).toContain("bun=0481");
+  });
+
+  it("rejects a Building HUB row for a different parcel", async () => {
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ response: { header: { resultCode: "00" }, body: { items: { item: {
+      sigunguCd: "27230", bjdongCd: "11100", platGbCd: "0", bun: "9999", ji: "0000",
+      mgmBldrgstPk: "WRONG", platPlc: "대구 북구 산격동 9999",
+    } } } } }), { status: 200 }));
+
+    await expect(lookupBuildingRegister(
+      { address: "대구 북구 산격동 481-5", sigunguCd: "27230", bjdongCd: "11100", platGbCd: "0", bun: "481", ji: "5" },
+      { apiKey: "secret", fetcher },
+    )).rejects.toThrow(/지번과 일치하지 않습니다/);
   });
 });

@@ -18,6 +18,41 @@ const demoDisclosure: LegalDisclosure = { location: "대구광역시 북구 산�
 const liveDisclosure: LegalDisclosure = { location: "", contractArea: "", propertyCategory: "", transactionType: "월세", floor: "", availableFrom: "", rooms: "", approvalDate: "", parking: "", maintenance: "", direction: "", lotNumberNotice: "중개의뢰인 요청으로 상세 지번 비공개", measurementNotice: "면적은 공부상 면적이며 현장 실측과 차이가 있을 수 있습니다." };
 const demoCopies: Record<Platform, string> = { naver: "경북대 북문 도보 3분, 채광 좋은 분리형 원룸입니다. 보증금 500만원 / 월 42만원, 관리비 7만원입니다.", instagram: "북문 3분 분리형 원룸. 채광 좋고 생활권이 편리합니다. 500/42, 관리비 7.", daangn: "산격동 북문 가까운 깔끔한 원룸입니다. 직접 촬영한 사진이며 즉시 입주 가능합니다.", zigbang: "경북대 북문 인근 / 분리형 원룸 / 풀옵션 / 즉시입주" };
 const emptyCopies: Record<Platform, string> = { naver: "", instagram: "", daangn: "", zigbang: "" };
+const PROPERTY_DRAFT_KEY = "barjung:property-wizard-draft:v1";
+type RegistryStatus = "idle" | "loading" | "live" | "demo" | "failed";
+
+interface PropertyWizardDraft {
+  version: 1;
+  step: number;
+  title: string;
+  type: PropertyKind;
+  deposit: string;
+  rent: string;
+  maintenance: string;
+  address: string;
+  detailAddress: string;
+  selectedAddress: SelectedAddress | null;
+  registeredById: string;
+  disclosure: LegalDisclosure;
+  copies: Record<Platform, string>;
+  registryStatus: RegistryStatus;
+  registryMessage: string;
+  registry: BuildingRegisterLookupResult | null;
+  hadPhotos: boolean;
+}
+
+function readPropertyDraft(): PropertyWizardDraft | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(PROPERTY_DRAFT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PropertyWizardDraft;
+    return parsed.version === 1 && typeof parsed.title === "string" && typeof parsed.address === "string" ? parsed : null;
+  } catch {
+    window.localStorage.removeItem(PROPERTY_DRAFT_KEY);
+    return null;
+  }
+}
 
 interface PropertyWizardProps {
   mode: WorkspaceMode;
@@ -42,6 +77,9 @@ function parcelFromSelectedAddress(selected: SelectedAddress | null): Omit<Parce
 export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyWizardProps) {
   const demo = mode === "demo";
   const activeEmployees = useMemo(() => employees.filter((employee) => employee.status === "재직"), [employees]);
+  const initialDraft = useMemo(() => demo ? null : readPropertyDraft(), [demo]);
+  const [recoveryDraft, setRecoveryDraft] = useState<PropertyWizardDraft | null>(initialDraft);
+  const [draftReady, setDraftReady] = useState(demo || !initialDraft);
   const [step, setStep] = useState(0);
   const [optimize, setOptimize] = useState(demo ? 0 : 100);
   const [title, setTitle] = useState(demo ? "북문 도보 3분, 깔끔한 분리형 원룸" : "");
@@ -55,12 +93,30 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
   const [registeredById, setRegisteredById] = useState(activeEmployees[0]?.id ?? employees[0]?.id ?? "");
   const [disclosure, setDisclosure] = useState<LegalDisclosure>(demo ? demoDisclosure : liveDisclosure);
   const [copies, setCopies] = useState<Record<Platform, string>>(demo ? demoCopies : emptyCopies);
-  const [registryStatus, setRegistryStatus] = useState<"idle" | "loading" | "live" | "demo" | "failed">("idle");
+  const [registryStatus, setRegistryStatus] = useState<RegistryStatus>("idle");
   const [registryMessage, setRegistryMessage] = useState("주소 확인 버튼을 누르면 공공데이터 API로 조회합니다.");
   const [registry, setRegistry] = useState<BuildingRegisterLookupResult | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
+  const [photoRestoreNotice, setPhotoRestoreNotice] = useState(false);
+
+  const saveDraft = () => {
+    if (demo || !draftReady || typeof window === "undefined") return;
+    const hasContent = Boolean(title.trim() || address.trim() || detailAddress.trim() || photos.length || Object.values(copies).some((value) => value.trim()));
+    if (!hasContent) {
+      window.localStorage.removeItem(PROPERTY_DRAFT_KEY);
+      return;
+    }
+    const payload: PropertyWizardDraft = {
+      version: 1, step, title, type, deposit, rent, maintenance, address, detailAddress, selectedAddress, registeredById,
+      disclosure, copies, registryStatus: registryStatus === "loading" ? "idle" : registryStatus,
+      registryMessage, registry, hadPhotos: photos.length > 0 || photoRestoreNotice,
+    };
+    window.localStorage.setItem(PROPERTY_DRAFT_KEY, JSON.stringify(payload));
+  };
+
+  useEffect(() => { saveDraft(); }, [step, title, type, deposit, rent, maintenance, address, detailAddress, selectedAddress, registeredById, disclosure, copies, registryStatus, registryMessage, registry, photos, photoRestoreNotice, draftReady]);
 
   useEffect(() => { if (step !== 1 || optimize >= 100) return; const timer = window.setInterval(() => setOptimize((v) => Math.min(100, v + 4)), 70); return () => window.clearInterval(timer); }, [step, optimize]);
 
@@ -68,6 +124,25 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
   const copyCount = PLATFORMS.filter((platform) => copies[platform].trim()).length;
   const basicsReady = title.trim().length > 0 && address.trim().length > 0;
   const selectedParcel = parcelFromSelectedAddress(selectedAddress);
+
+  const resetAddressDerivedState = (location = "") => {
+    setRegistry(null);
+    setRegistryStatus("idle");
+    setRegistryMessage("주소 확인 버튼을 누르면 공공데이터 API로 조회합니다.");
+    setDisclosure((current) => ({
+      ...current,
+      location,
+      contractArea: "",
+      propertyCategory: "",
+      floor: "",
+      availableFrom: "",
+      rooms: "",
+      approvalDate: "",
+      parking: "",
+      maintenance: "",
+      direction: "",
+    }));
+  };
 
   const lookupRegistry = async () => {
     const parcel = parcelFromSelectedAddress(selectedAddress);
@@ -99,10 +174,49 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
   const selectAddress = (result: SelectedAddress) => {
     setSelectedAddress(result);
     setDetailAddress("");
-    setRegistry(null);
-    setRegistryStatus("idle");
+    resetAddressDerivedState(result.roadAddress || result.address);
     setRegistryMessage(`우편번호 ${result.zonecode}${result.buildingName ? ` · ${result.buildingName}` : ""} — 상세주소를 입력한 뒤 건축물대장을 확인하세요.`);
-    setDisclosure((current) => ({ ...current, location: result.roadAddress || result.address }));
+  };
+
+  const changeAddress = (value: string) => {
+    setAddress(value);
+    setSelectedAddress(null);
+    setDetailAddress("");
+    resetAddressDerivedState(value);
+  };
+
+  const restoreDraft = () => {
+    if (!recoveryDraft) return;
+    setStep(Math.max(0, Math.min(steps.length - 1, recoveryDraft.step)));
+    setTitle(recoveryDraft.title);
+    setType(recoveryDraft.type);
+    setDeposit(recoveryDraft.deposit);
+    setRent(recoveryDraft.rent);
+    setMaintenance(recoveryDraft.maintenance);
+    setAddress(recoveryDraft.address);
+    setDetailAddress(recoveryDraft.detailAddress);
+    setSelectedAddress(recoveryDraft.selectedAddress);
+    setRegisteredById(recoveryDraft.registeredById);
+    setDisclosure({ ...liveDisclosure, ...recoveryDraft.disclosure });
+    setCopies({ ...emptyCopies, ...recoveryDraft.copies });
+    setRegistry(recoveryDraft.registry);
+    setRegistryStatus(recoveryDraft.registryStatus === "loading" ? "idle" : recoveryDraft.registryStatus);
+    setRegistryMessage(recoveryDraft.registryMessage);
+    setPhotos([]);
+    setPhotoRestoreNotice(recoveryDraft.hadPhotos);
+    setRecoveryDraft(null);
+    setDraftReady(true);
+  };
+
+  const discardDraft = () => {
+    if (typeof window !== "undefined") window.localStorage.removeItem(PROPERTY_DRAFT_KEY);
+    setRecoveryDraft(null);
+    setDraftReady(true);
+  };
+
+  const closeWizard = () => {
+    saveDraft();
+    onClose();
   };
 
   const finish = async () => {
@@ -116,14 +230,18 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
       targets: PLATFORMS.map((platform) => ({ platform, status: "not_requested", progress: 0 })),
     };
     setSaving(true); setSaveError("");
-    try { await onFinish(input, photos); }
+    try {
+      await onFinish(input, photos);
+      if (typeof window !== "undefined") window.localStorage.removeItem(PROPERTY_DRAFT_KEY);
+    }
     catch (error) { setSaveError(error instanceof Error ? error.message : "매물을 저장하지 못했습니다."); }
     finally { setSaving(false); }
   };
 
   return (
     <div className="modal-backdrop"><div className="wizard-modal" role="dialog" aria-modal="true">
-      <div className="wizard-head"><div><span className="eyebrow">NEW PROPERTY</span><h2>새 매물 등록</h2></div><button className="icon-button" aria-label="닫기" onClick={onClose}><X size={20} /></button></div>
+      {recoveryDraft && <div className="draft-recovery-overlay" role="alertdialog" aria-modal="true" aria-labelledby="draft-recovery-title"><div className="draft-recovery-box"><FileCheck2 size={28} /><h3 id="draft-recovery-title">작성 중인 값을 불러올까요?</h3><p>저장되지 않은 매물 정보와 진행 단계를 복원합니다.{recoveryDraft.hadPhotos ? " 사진 파일은 보안상 다시 선택해야 합니다." : ""}</p><div><button type="button" className="secondary" onClick={discardDraft}>아니오, 새로 작성</button><button type="button" className="primary" onClick={restoreDraft}>예, 이전 값 불러오기</button></div></div></div>}
+      <div className="wizard-head"><div><span className="eyebrow">NEW PROPERTY</span><h2>새 매물 등록</h2></div><button className="icon-button" aria-label="닫기" onClick={closeWizard}><X size={20} /></button></div>
       <div className="wizard-steps">{steps.map((label, index) => <div key={label} className={index === step ? "active" : index < step ? "done" : ""}><span>{index < step ? <Check size={13} /> : index + 1}</span><small>{label}</small></div>)}</div>
       <div className="wizard-body">
         {step === 0 && (
@@ -135,9 +253,9 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
             <label>월세 (만원)<input inputMode="numeric" value={rent} onChange={(event) => setRent(event.target.value.replace(/[^\d]/g, ""))} /></label>
             <label>관리비 (만원)<input inputMode="numeric" value={maintenance} onChange={(event) => setMaintenance(event.target.value.replace(/[^\d]/g, ""))} /></label>
             <label>등록 직원<select value={registeredById} onChange={(event) => setRegisteredById(event.target.value)}>{employees.length === 0 && <option value="">직원 미등록</option>}{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name} · {employee.role}</option>)}</select></label>
-            <label className="span-2">정확한 주소<AddressSearch value={address} onChange={(value) => { setAddress(value); setSelectedAddress(null); setRegistryStatus("idle"); }} onSelect={selectAddress} /></label>
+            <label className="span-2">정확한 주소<AddressSearch value={address} onChange={changeAddress} onSelect={selectAddress} /></label>
             <label className="span-2">상세주소<input aria-label="상세주소" value={detailAddress} onChange={(event) => setDetailAddress(event.target.value)} placeholder="동·층·호 등 (내부 전용)" /></label>
-            <div className="address-confirm span-2"><span>{selectedParcel ? `선택 완료 · ${selectedAddress?.roadAddress ? "도로명" : "지번"} · ${selectedAddress?.zonecode}` : "주소 검색 버튼을 눌러 검색 결과를 선택해 주세요."}</span><button type="button" onClick={lookupRegistry} disabled={registryStatus === "loading" || !selectedParcel}><Search size={15} /> {registryStatus === "loading" ? "조회 중" : selectedParcel ? "건축물대장 확인" : "주소 선택 필요"}</button></div>
+            <div className={`address-confirm span-2 ${registryStatus === "live" ? "confirmed" : ""}`}><span>{registryStatus === "live" ? "건축물대장 확인 완료 · 자동 입력값을 확인하세요." : selectedParcel ? `선택 완료 · ${selectedAddress?.roadAddress ? "도로명" : "지번"} · ${selectedAddress?.zonecode}` : "주소 검색 버튼을 눌러 검색 결과를 선택해 주세요."}</span><button type="button" onClick={lookupRegistry} disabled={registryStatus === "loading" || !selectedParcel}>{registryStatus === "live" ? <Check size={15} /> : <Search size={15} />} {registryStatus === "loading" ? "조회 중" : registryStatus === "live" ? "확인 완료" : selectedParcel ? "건축물대장 확인" : "주소 선택 필요"}</button></div>
             <div className="notice span-2"><MapPin size={16} /><div><strong>외부 주소는 플랫폼마다 다르게 공개됩니다.</strong><small>{registryMessage}</small></div></div>
           </div>
         )}
@@ -149,7 +267,8 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
         )}
         {step === 1 && !demo && (
           <div>
-            <label className="drop-zone media-drop-zone"><input aria-label="매물 사진 선택" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => setPhotos(Array.from(event.target.files ?? []))} /><Upload size={28} /><strong>{photos.length ? `현장 사진 ${photos.length}장을 선택했습니다` : "현장 사진을 선택하세요"}</strong><small>매물 등록 시 Windows 로컬 Python이 EXIF를 제거하고 축소한 JPEG만 Supabase에 올립니다.</small></label>
+            {photoRestoreNotice && <div className="notice photo-restore-notice"><CircleAlert size={17} /><div><strong>사진을 다시 선택해 주세요.</strong><small>브라우저 보안상 닫기 전에 선택했던 로컬 파일은 자동 복원할 수 없습니다.</small></div></div>}
+            <label className="drop-zone media-drop-zone"><input aria-label="매물 사진 선택" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => { setPhotos(Array.from(event.target.files ?? [])); setPhotoRestoreNotice(false); }} /><Upload size={28} /><strong>{photos.length ? `현장 사진 ${photos.length}장을 선택했습니다` : "현장 사진을 선택하세요"}</strong><small>매물 등록 시 Windows 로컬 Python이 EXIF를 제거하고 축소한 JPEG만 Supabase에 올립니다.</small></label>
             <div className="notice" style={{ marginTop: 12 }}><FileCheck2 size={17} /><div><strong>{photos.length ? "Python 최적화 준비 완료" : "JPG·PNG·WebP, 최대 30장"}</strong><small>{photos.length ? photos.map((file) => file.name).join(" · ") : "원본은 Supabase에 저장하지 않습니다. 사진 없이도 매물 등록은 가능합니다."}</small></div></div>
           </div>
         )}
@@ -183,7 +302,7 @@ export function PropertyWizard({ mode, employees, onClose, onFinish }: PropertyW
         )}
       </div>
       <div className="wizard-footer">
-        <button className="secondary" onClick={() => (step === 0 ? onClose() : setStep(step - 1))}>{step === 0 ? "취소" : "이전"}</button>
+        <button type="button" className="secondary wizard-previous" onClick={() => (step === 0 ? closeWizard() : setStep(step - 1))}>{step === 0 ? "취소" : "← 이전 단계"}</button>
         <div>
           <span>{step + 1} / {steps.length}</span>
           {step < steps.length - 1
