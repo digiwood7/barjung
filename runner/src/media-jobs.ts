@@ -70,6 +70,19 @@ async function failJob(client: SupabaseClient, job: ClaimedMediaJob, error: unkn
   }).eq("id", job.id).eq("lease_agent_id", job.lease_agent_id);
 }
 
+export async function removeExcessPropertyMedia(client: SupabaseClient, job: ClaimedMediaJob, nextPhotoCount: number): Promise<void> {
+  const { data: staleMedia, error: selectError } = await client.from("property_media")
+    .select("storage_path").eq("property_id", job.property_id).gte("sort_order", nextPhotoCount);
+  if (selectError) throw new Error(`기존 사진 목록 확인 실패: ${selectError.message}`);
+  const storagePaths = (staleMedia ?? []).map((item) => item.storage_path as string).filter(Boolean);
+  if (storagePaths.length === 0) return;
+  const { error: removeError } = await client.storage.from(MEDIA_BUCKET).remove(storagePaths);
+  if (removeError) throw new Error(`기존 사진 파일 정리 실패: ${removeError.message}`);
+  const { error: deleteError } = await client.from("property_media").delete()
+    .eq("property_id", job.property_id).gte("sort_order", nextPhotoCount);
+  if (deleteError) throw new Error(`기존 사진 메타데이터 정리 실패: ${deleteError.message}`);
+}
+
 export async function runMediaOptimizationJob(client: SupabaseClient, job: ClaimedMediaJob): Promise<void> {
   let files: SourceFile[];
   try { files = validateMediaSourceFiles(job); }
@@ -118,6 +131,8 @@ export async function runMediaOptimizationJob(client: SupabaseClient, job: Claim
       }, { onConflict: "property_id,sort_order" });
       if (rowError) throw new Error(`사진 메타데이터 저장 실패: ${rowError.message}`);
     }
+
+    await removeExcessPropertyMedia(client, job, manifest.length);
 
     const { error: completeError } = await client.from("media_optimization_jobs").update({
       status: "succeeded", error_summary: null, completed_at: new Date().toISOString(),

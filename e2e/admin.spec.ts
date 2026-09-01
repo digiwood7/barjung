@@ -29,10 +29,9 @@ test("property editor keeps actions visible and scrolls long fields", async ({ p
   await page.getByRole("button", { name: "매물 수정" }).click();
 
   const dialog = page.getByRole("dialog");
-  const scrollRegion = page.getByRole("region", { name: "매물 정보 수정 항목" });
-  const saveButton = page.getByRole("button", { name: "변경사항 저장" });
+  const scrollRegion = page.getByRole("region", { name: "매물 등록·수정 항목" });
   await expect(dialog).toBeVisible();
-  await expect(saveButton).toBeInViewport();
+  await page.getByRole("button", { name: /고지사항 입력/ }).click();
 
   const layout = await scrollRegion.evaluate((element) => ({
     overflowY: getComputedStyle(element).overflowY,
@@ -41,6 +40,9 @@ test("property editor keeps actions visible and scrolls long fields", async ({ p
   }));
   expect(layout.overflowY).toBe("auto");
   expect(layout.scrollHeight).toBeGreaterThan(layout.clientHeight);
+
+  await page.getByRole("button", { name: /등록 확인/ }).click();
+  await expect(page.getByRole("button", { name: "변경사항 저장" })).toBeInViewport();
 });
 
 test("mobile navigation exposes the approved menu", async ({ page }, testInfo) => {

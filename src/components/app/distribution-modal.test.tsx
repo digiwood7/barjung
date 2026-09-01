@@ -20,6 +20,7 @@ describe("DistributionModal 전체 발행", () => {
       getProperty={vi.fn(async () => completed)}
     />);
 
+    fireEvent.click(screen.getByRole("button", { name: "선택 플랫폼 발행 시작 (4)" }));
     const completedDialog = await screen.findByRole("alertdialog", { name: "선택한 플랫폼 발행이 완료되었습니다." });
     fireEvent.click(within(completedDialog).getByRole("button", { name: "결과 확인" }));
     expect(screen.getAllByText("발행 완료")).toHaveLength(4);
@@ -45,11 +46,35 @@ describe("DistributionModal 전체 발행", () => {
       initialPlatforms={["naver", "instagram", "daangn"]}
     />);
 
+    fireEvent.click(screen.getByRole("button", { name: "선택 플랫폼 발행 시작 (3)" }));
     const resultDialog = await screen.findByRole("alertdialog", { name: "선택한 플랫폼 발행 처리가 끝났습니다." });
     expect(within(resultDialog).getByText("인스타 로그인 세션이 만료되었습니다.")).toBeInTheDocument();
     fireEvent.click(within(resultDialog).getByRole("button", { name: "결과 확인" }));
     fireEvent.click(screen.getByRole("button", { name: "인스타만 재발행" }));
     await waitFor(() => expect(requestDistribution).toHaveBeenLastCalledWith(properties[0].id, ["instagram"]));
     expect(screen.getByText("이번 발행에서 선택하지 않음")).toBeInTheDocument();
+  });
+
+  it("기본 전체 선택에서 원하는 플랫폼만 골라 명시적으로 발행을 시작한다", async () => {
+    const requestDistribution = vi.fn(async (_propertyId: string, selected?: string[]) => ({
+      ...properties[0],
+      targets: properties[0].targets.map((target) => selected?.includes(target.platform)
+        ? { ...target, status: "queued" as const, progress: 0 }
+        : { ...target, status: "not_requested" as const, progress: 0 }),
+    }));
+    render(<DistributionModal
+      property={properties[0]}
+      mode="live"
+      agent={{ id: "a1", deviceName: "BARJUNG-PC", status: "online", lastHeartbeatAt: null, label: "온라인" }}
+      onClose={() => undefined}
+      onUpdate={() => undefined}
+      requestDistribution={requestDistribution}
+      getProperty={vi.fn(async () => properties[0])}
+    />);
+
+    for (const name of ["인스타", "당근"]) fireEvent.click(screen.getByRole("checkbox", { name: `${name} 발행 선택` }));
+    expect(requestDistribution).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "선택 플랫폼 발행 시작 (2)" }));
+    await waitFor(() => expect(requestDistribution).toHaveBeenCalledWith(properties[0].id, ["naver", "zigbang"]));
   });
 });

@@ -3,12 +3,12 @@
 import { Check, CircleAlert } from "lucide-react";
 import { useCallback, useState } from "react";
 import type { BarjungRepository } from "@/lib/domain/repository";
-import type { Customer, DistributionTarget, Employee, Platform, Property } from "@/lib/domain/types";
+import type { Customer, DistributionTarget, Employee, Property } from "@/lib/domain/types";
 import { CustomersView } from "./app/customers-view";
 import { Dashboard } from "./app/dashboard";
 import { DistributionModal } from "./app/distribution-modal";
 import { EmployeesView } from "./app/employees-view";
-import { EditEntityModal, EditPropertyModal, SimpleFormModal } from "./app/entity-modals";
+import { EditEntityModal, SimpleFormModal } from "./app/entity-modals";
 import { PropertiesView, PropertyDetail } from "./app/properties-view";
 import { PropertyWizard } from "./app/property-wizard";
 import { SettingsView } from "./app/settings-view";
@@ -23,7 +23,7 @@ export function BarjungApp({ repository }: { repository?: BarjungRepository } = 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null);
   const [wizard, setWizard] = useState(false);
-  const [distributionRequest, setDistributionRequest] = useState<{ id: string; platforms?: Platform[] } | null>(null);
+  const [distributionRequest, setDistributionRequest] = useState<{ id: string } | null>(null);
   const [mobileNav, setMobileNav] = useState(false);
   const [form, setForm] = useState<{ type: "customer" | "employee" } | null>(null);
   const [editing, setEditing] = useState<Customer | Employee | null>(null);
@@ -68,17 +68,36 @@ export function BarjungApp({ repository }: { repository?: BarjungRepository } = 
       <main>
         <Topbar view={view} mode={mode} readOnly={readOnly} onMenu={() => setMobileNav(true)} />
         <div className="content">
-          {view === "dashboard" && <Dashboard properties={properties} onView={setView} onSelect={(property) => setSelectedId(property.id)} onNew={() => setWizard(true)} />}
-          {view === "properties" && <PropertiesView properties={properties} mode={mode} onSelect={(property) => setSelectedId(property.id)} onNew={() => setWizard(true)} />}
+          {view === "dashboard" && <Dashboard properties={properties} onView={setView} onSelect={(property) => setSelectedId(property.id)} onNew={() => { setEditingPropertyId(null); setWizard(true); }} />}
+          {view === "properties" && <PropertiesView properties={properties} mode={mode} onSelect={(property) => setSelectedId(property.id)} onNew={() => { setEditingPropertyId(null); setWizard(true); }} />}
           {view === "customers" && <CustomersView customers={customers} onAdd={() => { setFormError(""); setForm({ type: "customer" }); }} onEdit={(customer) => { setFormError(""); setEditing(customer); }} />}
           {view === "employees" && <EmployeesView employees={employees} properties={properties} onAdd={() => { setFormError(""); setForm({ type: "employee" }); }} onEdit={(employee) => { setFormError(""); setEditing(employee); }} />}
           {view === "settings" && <SettingsView settings={settings} agent={agent} office={office} mode={mode} properties={properties} onUpdate={(patch) => run(async () => { await actions.updateSettings(patch); }, "설정을 저장했습니다.")} />}
         </div>
       </main>
 
-      {selected && <PropertyDetail property={selected} office={office} mode={mode} onClose={() => setSelectedId(null)} onPublish={() => { setDistributionRequest({ id: selected.id }); setSelectedId(null); }} onEdit={() => { setFormError(""); setEditingPropertyId(selected.id); setSelectedId(null); }} />}
-      {wizard && <PropertyWizard mode={mode} employees={employees} onClose={() => setWizard(false)} onFinish={async (input, photos, platforms) => { let created = await actions.createProperty(input); if (mode === "live" && photos.length) created = await actions.uploadPropertyMedia(created.id, photos); setWizard(false); if (mode === "live") setDistributionRequest({ id: created.id, platforms }); else setSelectedId(created.id); showToast(photos.length ? `사진 ${photos.length}장을 최적화해 저장했습니다.` : "새 매물을 등록했습니다."); }} />}
-      {distribution && <DistributionModal property={distribution} mode={mode} agent={agent} onClose={() => setDistributionRequest(null)} onUpdate={updateTargets} requestDistribution={actions.requestDistribution} getProperty={actions.getProperty} initialPlatforms={distributionRequest?.platforms} />}
+      {selected && <PropertyDetail property={selected} office={office} mode={mode} onClose={() => setSelectedId(null)} onPublish={() => { setDistributionRequest({ id: selected.id }); setSelectedId(null); }} onEdit={() => { setFormError(""); setEditingPropertyId(selected.id); setSelectedId(null); setWizard(true); }} />}
+      {wizard && <PropertyWizard mode={mode} employees={employees} property={editingProperty ?? undefined} onClose={() => { setWizard(false); if (editingPropertyId) setSelectedId(editingPropertyId); setEditingPropertyId(null); }} onSave={async (input, photos, propertyId) => {
+        const creating = !propertyId;
+        let saved = propertyId
+          ? await actions.updateProperty(propertyId, { ...input, updatedAt: "방금 전" })
+          : await actions.createProperty(input);
+        try {
+          if (mode === "live" && photos.length) saved = await actions.uploadPropertyMedia(saved.id, photos);
+        } catch (error) {
+          if (creating) await actions.removeProperty(saved.id).catch(() => undefined);
+          throw error;
+        }
+        setEditingPropertyId(saved.id);
+        showToast(photos.length ? `매물 저장 완료 · 사진 ${saved.photos}장 최적화` : creating ? "매물 등록을 완료했습니다." : "매물 정보를 저장했습니다.");
+        return saved;
+      }} onDelete={async (propertyId) => {
+        const target = properties.find((item) => item.id === propertyId);
+        await actions.removeProperty(propertyId);
+        setWizard(false); setEditingPropertyId(null);
+        showToast(`${target?.number ?? "매물"} 정보를 삭제했습니다.`);
+      }} onPublish={(propertyId) => { setWizard(false); setEditingPropertyId(null); setDistributionRequest({ id: propertyId }); }} />}
+      {distribution && <DistributionModal property={distribution} mode={mode} agent={agent} onClose={() => setDistributionRequest(null)} onUpdate={updateTargets} requestDistribution={actions.requestDistribution} getProperty={actions.getProperty} />}
       {form && (
         <SimpleFormModal type={form.type} inquiryTypes={settings.inquiryTypes} busy={busy} error={formError} onClose={() => setForm(null)} onSave={async (values) => {
           const ok = form.type === "customer"
@@ -100,20 +119,6 @@ export function BarjungApp({ repository }: { repository?: BarjungRepository } = 
               ? await run(async () => { await actions.removeCustomer(editing.id); }, `${editing.name} 정보를 삭제했습니다.`)
               : await run(async () => { await actions.removeEmployee(editing.id); }, `${editing.name} 정보를 삭제했습니다.`);
             if (ok) setEditing(null);
-          }} />
-      )}
-      {editingProperty && (
-        <EditPropertyModal property={editingProperty} employees={employees} busy={busy} error={formError} onClose={() => setEditingPropertyId(null)}
-          onSave={async (updated) => {
-            const ok = await run(async () => {
-              const { id, ...patch } = updated;
-              await actions.updateProperty(id, { ...patch, updatedAt: "방금 전" });
-            }, "매물 정보를 저장했습니다.");
-            if (ok) setEditingPropertyId(null);
-          }}
-          onDelete={async () => {
-            const ok = await run(async () => { await actions.removeProperty(editingProperty.id); }, `${editingProperty.number} 매물을 삭제했습니다.`);
-            if (ok) setEditingPropertyId(null);
           }} />
       )}
       {toast && <div className={`toast ${toast.tone}`}>{toast.tone === "ok" ? <Check size={16} /> : <CircleAlert size={16} />} {toast.message}</div>}

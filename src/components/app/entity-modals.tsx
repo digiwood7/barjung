@@ -2,10 +2,9 @@
 
 import { Check, X } from "lucide-react";
 import { useState } from "react";
-import { DEFAULT_INQUIRY_TYPES, PLATFORMS } from "@/lib/domain/types";
-import type { Customer, Employee, Property, WorkspaceMode } from "@/lib/domain/types";
+import { DEFAULT_INQUIRY_TYPES } from "@/lib/domain/types";
+import type { Customer, Employee, WorkspaceMode } from "@/lib/domain/types";
 import { toKstInputValue } from "@/lib/supabase/mappers";
-import { platformName } from "./ui";
 
 export type NewEntityValues = { name: string; phone: string; detail: string; note: string };
 
@@ -15,7 +14,6 @@ function formatPhoneNumber(value: string): string {
   if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
   return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
 }
-
 function isCompletePhone(value: string): boolean {
   return /^\d{3}-\d{4}-\d{4}$/.test(value);
 }
@@ -44,7 +42,6 @@ export function SimpleFormModal({ type, inquiryTypes = DEFAULT_INQUIRY_TYPES, bu
     </ModalFrame>
   );
 }
-
 interface EditEntityModalProps {
   entity: Customer | Employee;
   mode: WorkspaceMode;
@@ -86,45 +83,3 @@ export function EditEntityModal({ entity, mode, busy, error, onClose, onSave, on
   );
 }
 
-interface EditPropertyModalProps {
-  property: Property;
-  employees: Employee[];
-  busy?: boolean;
-  error?: string;
-  onClose: () => void;
-  onSave: (property: Property) => void;
-  onDelete: () => void;
-}
-
-export function EditPropertyModal({ property, employees, busy, error, onClose, onSave, onDelete }: EditPropertyModalProps) {
-  const [draft, setDraft] = useState(property);
-  const change = <K extends keyof Property>(key: K, value: Property[K]) => setDraft((current) => ({ ...current, [key]: value }));
-  return (
-    <div className="modal-backdrop"><div className="simple-modal property-edit-modal" role="dialog" aria-modal="true">
-      <div className="wizard-head"><div><span className="eyebrow">EDIT PROPERTY</span><h2>매물 정보 수정</h2></div><button aria-label="닫기" className="icon-button" onClick={onClose}><X size={20} /></button></div>
-      <div className="simple-form property-edit-scroll" role="region" aria-label="매물 정보 수정 항목">
-        <label>매물 제목<input value={draft.title} onChange={(event) => change("title", event.target.value)} /></label>
-        <label>매물 유형<select value={draft.type} onChange={(event) => change("type", event.target.value as Property["type"])}><option>원룸</option><option>투룸</option><option>오피스텔</option></select></label>
-        <label>상태<select value={draft.status} onChange={(event) => change("status", event.target.value as Property["status"])}><option>등록 대기</option><option>검토 완료</option><option>광고 중</option><option>계약 진행</option><option>거래 완료</option><option>보류</option><option>종료</option></select></label>
-        <label>등록 직원<select value={draft.registeredById ?? ""} onChange={(event) => { const employee = employees.find((item) => item.id === event.target.value); setDraft((current) => ({ ...current, registeredById: employee?.id ?? null, registeredBy: employee?.name ?? current.registeredBy })); }}><option value="">{draft.registeredById ? "미지정" : draft.registeredBy}</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name} · {employee.role}</option>)}</select></label>
-        <label>정확한 주소<input value={draft.exactAddress} onChange={(event) => change("exactAddress", event.target.value)} /></label>
-        <label>보증금 (만원)<input type="number" value={draft.deposit} onChange={(event) => change("deposit", Number(event.target.value))} /></label>
-        <label>월세 (만원)<input type="number" value={draft.rent} onChange={(event) => change("rent", Number(event.target.value))} /></label>
-        <label>관리비 (만원)<input type="number" value={draft.maintenance} onChange={(event) => change("maintenance", Number(event.target.value))} /></label>
-        <label>방향 (법정 고지)<input value={draft.disclosure.direction} placeholder="예: 남동향 (주실 창 기준)" onChange={(event) => change("disclosure", { ...draft.disclosure, direction: event.target.value })} /></label>
-        <label>계약면적 (법정 고지)<input value={draft.disclosure.contractArea} placeholder="예: 26.42㎡" onChange={(event) => change("disclosure", { ...draft.disclosure, contractArea: event.target.value })} /></label>
-        {PLATFORMS.map((platform) => (
-          <label key={platform}>{platformName[platform]} 원고<textarea value={draft.copies?.[platform] ?? ""} onChange={(event) => {
-            const value = event.target.value;
-            setDraft((current) => ({
-              ...current,
-              employeeCopy: platform === "naver" ? value : current.employeeCopy,
-              copies: { ...(current.copies ?? {}), [platform]: value },
-            }));
-          }} /></label>
-        ))}
-      </div>
-      <div className="modal-actions split-actions"><button className="danger-button" onClick={onDelete} disabled={busy}>매물 삭제</button><span className="form-error">{error}</span><button className="secondary" onClick={onClose}>취소</button><button className="primary" disabled={busy || !draft.title.trim() || !draft.exactAddress.trim()} onClick={() => onSave(draft)}><Check size={15} /> {busy ? "저장 중" : "변경사항 저장"}</button></div>
-    </div></div>
-  );
-}

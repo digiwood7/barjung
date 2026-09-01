@@ -85,8 +85,9 @@ describe("BarjungApp administrator workflows (demo mode)", () => {
     fireEvent.click(screen.getByRole("button", { name: /다음/ }));
     fireEvent.click(screen.getByRole("button", { name: "방향 예시값 입력" }));
     fireEvent.click(screen.getByRole("button", { name: /다음/ }));
-    fireEvent.click(screen.getByRole("button", { name: /다음/ }));
     fireEvent.click(screen.getByRole("button", { name: /^매물 등록$/ }));
+    expect((await screen.findAllByText("매물 정보를 저장했습니다.")).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "닫기" }));
     expect(await screen.findByRole("heading", { name: "테스트용 신규 원룸" })).toBeInTheDocument();
     expect(screen.getAllByText(/보증금 700/).length).toBeGreaterThan(0);
   });
@@ -96,8 +97,11 @@ describe("BarjungApp administrator workflows (demo mode)", () => {
     fireEvent.click(await screen.findByRole("button", { name: /260829-01.*북문 3분/ }));
     fireEvent.click(screen.getByRole("button", { name: "매물 수정" }));
     fireEvent.change(screen.getByLabelText("매물 제목"), { target: { value: "수정한 매물 제목" } });
+    fireEvent.click(screen.getByRole("button", { name: /등록 확인/ }));
     fireEvent.click(screen.getByRole("button", { name: "변경사항 저장" }));
-    expect(await screen.findByText("수정한 매물 제목")).toBeInTheDocument();
+    expect((await screen.findAllByText("매물 정보를 저장했습니다.")).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "닫기" }));
+    expect(await screen.findByRole("heading", { name: "수정한 매물 제목" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /260829-01.*수정한 매물 제목/ }));
     fireEvent.click(screen.getByRole("button", { name: "매물 수정" }));
     fireEvent.click(screen.getByRole("button", { name: "매물 삭제" }));

@@ -1,7 +1,7 @@
 "use client";
 
 import { Activity, Check, CheckCircle2, Clock3, ExternalLink, RefreshCcw, ShieldCheck, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { PLATFORMS } from "@/lib/domain/types";
 import type { AgentStatus, DistributionTarget, Platform, Property, PublishStatus, WorkspaceMode } from "@/lib/domain/types";
 import { PlatformLogo, platformName, terminalStatuses } from "./ui";
@@ -24,8 +24,8 @@ function useDemoSimulation(enabled: boolean, platforms: Platform[], setTargets: 
     if (!enabled) return;
     const timers: number[] = [];
     platforms.forEach((platform, index) => {
-      timers.push(window.setTimeout(() => setTargets((prev) => prev.map((t) => (t.platform === platform ? { ...t, status: "running" as PublishStatus, progress: 38 } : t))), 500 + index * 450));
-      timers.push(window.setTimeout(() => setTargets((prev) => prev.map((t) => (t.platform === platform ? { ...t, status: "not_configured", progress: 100, error: "고객 PC에서 플랫폼 동작을 연결해야 합니다." } : t))), 1700 + index * 550));
+      timers.push(window.setTimeout(() => setTargets((prev) => prev.map((target) => target.platform === platform ? { ...target, status: "running" as PublishStatus, progress: 38 } : target)), 500 + index * 450));
+      timers.push(window.setTimeout(() => setTargets((prev) => prev.map((target) => target.platform === platform ? { ...target, status: "not_configured", progress: 100, error: "고객 PC에서 플랫폼 동작을 연결해야 합니다." } : target)), 1700 + index * 550));
     });
     return () => timers.forEach(clearTimeout);
   }, [enabled, platforms, setTargets]);
@@ -33,28 +33,23 @@ function useDemoSimulation(enabled: boolean, platforms: Platform[], setTargets: 
 
 export function DistributionModal({ property, mode, agent, onClose, onUpdate, requestDistribution, getProperty, initialPlatforms }: DistributionModalProps) {
   const live = mode === "live";
-  const activePlatforms = useMemo(() => initialPlatforms?.length ? PLATFORMS.filter((platform) => initialPlatforms.includes(platform)) : [...PLATFORMS], [initialPlatforms]);
-  const [targets, setTargets] = useState<DistributionTarget[]>(() => PLATFORMS.map((platform) => ({ platform, status: activePlatforms.includes(platform) ? "queued" : "not_requested", progress: 0 })));
+  const initialSelection = useMemo(() => initialPlatforms?.length
+    ? PLATFORMS.filter((platform) => initialPlatforms.includes(platform))
+    : [...PLATFORMS], [initialPlatforms]);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>(initialSelection);
+  const [targets, setTargets] = useState<DistributionTarget[]>(() => PLATFORMS.map((platform) => ({ platform, status: "not_requested", progress: 0 })));
+  const [started, setStarted] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
   const [retrying, setRetrying] = useState<Platform | "all" | null>(null);
   const [completionAcknowledged, setCompletionAcknowledged] = useState(false);
-  const requested = useRef(false);
 
-  useDemoSimulation(!live, activePlatforms, setTargets);
-
-  // 라이브: 배포 요청 → 실행기 결과를 2초마다 확인
-  useEffect(() => {
-    if (!live || requested.current) return;
-    requested.current = true;
-    let alive = true;
-    requestDistribution(property.id, initialPlatforms)
-      .then((updated) => { if (alive) setTargets(updated.targets); })
-      .catch((cause: unknown) => { if (alive) setError(cause instanceof Error ? cause.message : "배포 요청에 실패했습니다."); });
-    return () => { alive = false; };
-  }, [live, property.id, requestDistribution, initialPlatforms]);
+  const activePlatforms = useMemo(() => PLATFORMS.filter((platform) => selectedPlatforms.includes(platform)), [selectedPlatforms]);
+  useDemoSimulation(!live && started, activePlatforms, setTargets);
 
   const activeTargets = targets.filter((target) => activePlatforms.includes(target.platform));
-  const pending = activeTargets.some((target) => !terminalStatuses.has(target.status));
+  const pending = started && activeTargets.some((target) => !terminalStatuses.has(target.status));
+
   useEffect(() => {
     if (!pending) return;
     const timer = window.setInterval(() => {
@@ -79,25 +74,79 @@ export function DistributionModal({ property, mode, agent, onClose, onUpdate, re
     return () => window.clearInterval(timer);
   }, [live, pending, property.id, getProperty]);
 
-  useEffect(() => onUpdate(targets), [targets, onUpdate]);
+  useEffect(() => {
+    if (started) onUpdate(targets);
+  }, [started, targets, onUpdate]);
+
+  const togglePlatform = (platform: Platform) => {
+    setSelectedPlatforms((current) => current.includes(platform)
+      ? current.filter((item) => item !== platform)
+      : [...current, platform]);
+  };
+
+  const startDistribution = async () => {
+    if (activePlatforms.length === 0) {
+      setError("발행할 플랫폼을 한 개 이상 선택하세요.");
+      return;
+    }
+    setError("");
+    setStarting(true);
+    setTargets(PLATFORMS.map((platform) => ({ platform, status: activePlatforms.includes(platform) ? "queued" : "not_requested", progress: 0 })));
+    if (!live) {
+      setStarted(true);
+      setStarting(false);
+      return;
+    }
+    try {
+      const updated = await requestDistribution(property.id, activePlatforms);
+      setTargets(updated.targets);
+      setStarted(true);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "발행 요청에 실패했습니다.");
+    } finally {
+      setStarting(false);
+    }
+  };
 
   const retry = useCallback(async (platform?: Platform) => {
     setRetrying(platform ?? "all"); setError(""); setCompletionAcknowledged(false);
     if (!live) {
-      setTargets((prev) => prev.map((t) => (t.status === "not_configured" || t.status === "failed") && (!platform || t.platform === platform) ? { ...t, status: "running", progress: 72, error: undefined } : t));
-      window.setTimeout(() => { setTargets((prev) => prev.map((t) => (t.status === "running" ? { ...t, status: "not_configured", progress: 100, error: "현장 연결 전에는 게시하지 않습니다." } : t))); setRetrying(null); }, 800);
+      setTargets((prev) => prev.map((target) => (target.status === "not_configured" || target.status === "failed") && (!platform || target.platform === platform) ? { ...target, status: "running", progress: 72, error: undefined } : target));
+      window.setTimeout(() => { setTargets((prev) => prev.map((target) => target.status === "running" ? { ...target, status: "not_configured", progress: 100, error: "현장 연결 전에는 게시하지 않습니다." } : target)); setRetrying(null); }, 800);
       return;
     }
-    try { const updated = await requestDistribution(property.id, platform ? [platform] : undefined); setTargets(updated.targets); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : "재시도에 실패했습니다."); }
-    finally { setRetrying(null); }
-  }, [live, property.id, requestDistribution]);
+    try {
+      const updated = await requestDistribution(property.id, platform ? [platform] : activePlatforms);
+      setTargets(updated.targets);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "재시도에 실패했습니다.");
+    } finally {
+      setRetrying(null);
+    }
+  }, [activePlatforms, live, property.id, requestDistribution]);
 
   const progress = activeTargets.length ? Math.round(activeTargets.reduce((sum, target) => sum + target.progress, 0) / activeTargets.length) : 0;
-  const allDone = !pending;
-  const allSucceeded = activeTargets.length > 0 && activeTargets.every((target) => target.status === "succeeded");
+  const allDone = started && activeTargets.length > 0 && !pending;
+  const allSucceeded = allDone && activeTargets.every((target) => target.status === "succeeded");
   const incompleteTargets = activeTargets.filter((target) => target.status !== "succeeded");
   const heading = error ? "전체 발행 요청을 처리하지 못했습니다" : allDone ? "전체 발행 결과" : live ? "플랫폼별 순차 발행 중입니다" : "전체 발행 준비 상태를 확인하고 있습니다";
+
+  if (!started) {
+    return (
+      <div className="modal-backdrop"><div className="distribution-modal" role="dialog" aria-modal="true" aria-labelledby="distribution-selection-title">
+        <div className="wizard-head"><div><span className="eyebrow">PLATFORM PUBLISH</span><h2 id="distribution-selection-title">발행할 플랫폼을 선택하세요</h2><p>{property.number} · {property.area} {property.type}</p></div><button className="icon-button" aria-label="닫기" onClick={onClose}><X size={20} /></button></div>
+        <div className="distribution-selection">
+          <div className="platform-selection-head"><div><strong>플랫폼 선택</strong><small>기본값은 전체 선택이며 필요한 플랫폼만 남길 수 있습니다.</small></div><label><input type="checkbox" aria-label="전체 플랫폼 선택" checked={selectedPlatforms.length === PLATFORMS.length} onChange={(event) => setSelectedPlatforms(event.target.checked ? [...PLATFORMS] : [])} /> 전체 선택</label></div>
+          <div className="copy-grid">
+            {PLATFORMS.map((platform) => <label key={platform} className={`copy-card platform-check ${selectedPlatforms.includes(platform) ? "selected" : "disabled"}`}><input type="checkbox" aria-label={`${platformName[platform]} 발행 선택`} checked={selectedPlatforms.includes(platform)} onChange={() => togglePlatform(platform)} /><PlatformLogo platform={platform} /><span><strong>{platformName[platform]}</strong><small>{selectedPlatforms.includes(platform) ? "이번 발행에 포함" : "이번 발행에서 제외"}</small></span></label>)}
+          </div>
+          {live && agent.status !== "online" && <div className="error-guide"><Activity size={17} /><span>실행기가 오프라인입니다. 발행 전 고객 PC 실행기 상태를 확인하세요.</span></div>}
+          {error && <div className="error-guide"><Activity size={17} /><span>{error}</span></div>}
+        </div>
+        <div className="distribution-foot"><span><ShieldCheck size={15} /> 저장된 매물과 사진을 선택한 플랫폼에만 발행합니다.</span><div><button type="button" className="secondary" onClick={onClose}>취소</button><button type="button" className="primary" onClick={startDistribution} disabled={starting || activePlatforms.length === 0}>{starting ? "발행 요청 중" : `선택 플랫폼 발행 시작 (${activePlatforms.length})`}</button></div></div>
+      </div></div>
+    );
+  }
 
   return (
     <div className="modal-backdrop"><div className="distribution-modal" role="dialog" aria-modal="true">
@@ -107,15 +156,15 @@ export function DistributionModal({ property, mode, agent, onClose, onUpdate, re
       {live && agent.status !== "online" && !allDone && <div className="error-guide"><Activity size={17} /><span>실행기가 오프라인입니다. 고객 PC에서 <strong>.\scripts\start-runner.ps1</strong> 를 실행하면 대기 작업을 이어서 처리합니다.</span></div>}
       {error && <div className="error-guide"><Activity size={17} /><span>{error}</span></div>}
       <div className="distribution-list">
-        {targets.map((t) => { const selected = activePlatforms.includes(t.platform); return (
-          <div className={`distribution-row ${t.status}`} key={t.platform}>
-            <PlatformLogo platform={t.platform} />
-            <div className="distribution-copy"><strong>{platformName[t.platform]}</strong><small>{!selected ? "이번 발행에서 선택하지 않음" : t.status === "queued" ? "앞 플랫폼 발행 완료 대기 중" : t.status === "running" ? "사진과 게시글을 업로드하는 중" : t.status === "succeeded" ? "발행 완료" : t.error ?? t.status}</small>{selected && <div className="mini-progress"><i className={t.status === "succeeded" ? "complete" : ""} style={{ width: `${t.progress}%` }} /></div>}</div>
-            {t.status === "succeeded" && t.url && <a href={t.url} target="_blank" rel="noreferrer"><ExternalLink size={14} /> 열기</a>}
-            {selected && (t.status === "failed" || t.status === "not_configured") && <button className="retry-button" aria-label={`${platformName[t.platform]}만 재발행`} onClick={() => retry(t.platform)} disabled={retrying !== null}><RefreshCcw size={14} /> 이 플랫폼 재발행</button>}
-            {t.status === "succeeded" && <CheckCircle2 className="distribution-done" size={19} />}
-            {t.status === "running" && <Activity className="spin" size={17} />}
-            {t.status === "queued" && <Clock3 size={17} />}
+        {targets.map((target) => { const selected = activePlatforms.includes(target.platform); return (
+          <div className={`distribution-row ${target.status}`} key={target.platform}>
+            <PlatformLogo platform={target.platform} />
+            <div className="distribution-copy"><strong>{platformName[target.platform]}</strong><small>{!selected ? "이번 발행에서 선택하지 않음" : target.status === "queued" ? "앞 플랫폼 발행 완료 대기 중" : target.status === "running" ? "사진과 게시글을 업로드하는 중" : target.status === "succeeded" ? "발행 완료" : target.error ?? target.status}</small>{selected && <div className="mini-progress"><i className={target.status === "succeeded" ? "complete" : ""} style={{ width: `${target.progress}%` }} /></div>}</div>
+            {target.status === "succeeded" && target.url && <a href={target.url} target="_blank" rel="noreferrer"><ExternalLink size={14} /> 열기</a>}
+            {selected && (target.status === "failed" || target.status === "not_configured") && <button className="retry-button" aria-label={`${platformName[target.platform]}만 재발행`} onClick={() => retry(target.platform)} disabled={retrying !== null}><RefreshCcw size={14} /> 이 플랫폼 재발행</button>}
+            {target.status === "succeeded" && <CheckCircle2 className="distribution-done" size={19} />}
+            {target.status === "running" && <Activity className="spin" size={17} />}
+            {target.status === "queued" && <Clock3 size={17} />}
           </div>
         ); })}
       </div>
