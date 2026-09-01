@@ -80,9 +80,9 @@ export function BarjungApp({ repository }: { repository?: BarjungRepository } = 
       {wizard && <PropertyWizard mode={mode} employees={employees} onClose={() => setWizard(false)} onFinish={async (input, photos, platforms) => { let created = await actions.createProperty(input); if (mode === "live" && photos.length) created = await actions.uploadPropertyMedia(created.id, photos); setWizard(false); if (mode === "live") setDistributionRequest({ id: created.id, platforms }); else setSelectedId(created.id); showToast(photos.length ? `사진 ${photos.length}장을 최적화해 저장했습니다.` : "새 매물을 등록했습니다."); }} />}
       {distribution && <DistributionModal property={distribution} mode={mode} agent={agent} onClose={() => setDistributionRequest(null)} onUpdate={updateTargets} requestDistribution={actions.requestDistribution} getProperty={actions.getProperty} initialPlatforms={distributionRequest?.platforms} />}
       {form && (
-        <SimpleFormModal type={form.type} busy={busy} error={formError} onClose={() => setForm(null)} onSave={async (values) => {
+        <SimpleFormModal type={form.type} inquiryTypes={settings.inquiryTypes} busy={busy} error={formError} onClose={() => setForm(null)} onSave={async (values) => {
           const ok = form.type === "customer"
-            ? await run(async () => { await actions.createCustomer({ name: values.name, phone: values.phone, interest: values.detail.replace(" 문의", ""), budget: values.note || "조건 확인 중", followUp: "일정 미정", followUpAt: null, note: values.note || "메모 없음" }); }, `${values.name} 고객을 등록했습니다.`)
+            ? await run(async () => { await actions.createCustomer({ name: values.name, phone: values.phone, interest: values.detail.replace(/\s*문의$/, ""), budget: values.note || "조건 확인 중", followUp: "일정 미정", followUpAt: null, note: values.note || "메모 없음" }); }, `${values.name} 고객을 등록했습니다.`)
             : await run(async () => { await actions.createEmployee({ name: values.name, phone: values.phone, role: values.detail, status: "재직" }); }, `${values.name} 직원을 등록했습니다.`);
           if (ok) setForm(null);
         }} />

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { agentFromRow, areaLabel, formatRelativeDate, kstDateStamp, parseFollowUp, targetsFromRows, toKstInputValue, wonFromMan, manFromWon } from "./mappers";
+import { defaultSettings } from "@/lib/domain/types";
+import { agentFromRow, areaLabel, formatRelativeDate, kstDateStamp, parseFollowUp, settingsFromRow, settingsToRow, targetsFromRows, toKstInputValue, wonFromMan, manFromWon } from "./mappers";
 
 const NOW = new Date("2026-08-30T03:00:00.000Z"); // KST 2026-08-30 12:00
 
@@ -39,5 +40,11 @@ describe("mappers", () => {
     expect(agentFromRow({ ...base, last_heartbeat_at: new Date(NOW.getTime() - 10_000).toISOString() }, NOW).status).toBe("online");
     expect(agentFromRow({ ...base, last_heartbeat_at: new Date(NOW.getTime() - 120_000).toISOString() }, NOW)).toMatchObject({ status: "offline", label: "오프라인 · 마지막 2분 전" });
     expect(agentFromRow(null, NOW).deviceName).toBe("실행기 미등록");
+  });
+
+  it("고객 문의 유형을 설정 JSON에 왕복 저장한다", () => {
+    const row = settingsToRow({ ...defaultSettings, inquiryTypes: ["상가", "토지 문의", "상가 문의"] }, "office-1");
+    expect(row.platform_settings).toMatchObject({ inquiry_types: ["상가 문의", "토지 문의"] });
+    expect(settingsFromRow(row).inquiryTypes).toEqual(["상가 문의", "토지 문의"]);
   });
 });

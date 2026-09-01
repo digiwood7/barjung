@@ -21,6 +21,28 @@ test("customer CRUD opens from the main navigation", async ({ page }, testInfo) 
   await expect(page.getByRole("button", { name: /김고객.*010-1111-2222/ })).toBeVisible();
 });
 
+test("property editor keeps actions visible and scrolls long fields", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name.startsWith("mobile"), "Desktop modal viewport regression coverage.");
+  await page.goto("/");
+  await page.getByRole("button", { name: /매물관리/ }).click();
+  await page.locator("tbody tr").first().click();
+  await page.getByRole("button", { name: "매물 수정" }).click();
+
+  const dialog = page.getByRole("dialog");
+  const scrollRegion = page.getByRole("region", { name: "매물 정보 수정 항목" });
+  const saveButton = page.getByRole("button", { name: "변경사항 저장" });
+  await expect(dialog).toBeVisible();
+  await expect(saveButton).toBeInViewport();
+
+  const layout = await scrollRegion.evaluate((element) => ({
+    overflowY: getComputedStyle(element).overflowY,
+    scrollHeight: element.scrollHeight,
+    clientHeight: element.clientHeight,
+  }));
+  expect(layout.overflowY).toBe("auto");
+  expect(layout.scrollHeight).toBeGreaterThan(layout.clientHeight);
+});
+
 test("mobile navigation exposes the approved menu", async ({ page }, testInfo) => {
   test.skip(!testInfo.project.name.startsWith("mobile"), "Mobile-only navigation coverage.");
   await page.goto("/");

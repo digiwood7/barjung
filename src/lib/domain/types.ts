@@ -13,6 +13,22 @@ export type PropertyStatus = "등록 대기" | "검토 완료" | "광고 중" | 
 export type PropertyKind = "원룸" | "투룸" | "오피스텔";
 export type EmploymentStatus = "재직" | "휴직" | "퇴사";
 export type AddressPolicy = "lot" | "district" | "hidden";
+export const DEFAULT_INQUIRY_TYPES = ["원룸 문의", "투룸 문의", "오피스텔 문의"] as const;
+
+export function normalizeInquiryTypeLabel(value: string): string {
+  const trimmed = value.trim().replace(/\s+/g, " ");
+  if (!trimmed) return "";
+  return trimmed.endsWith("문의") ? trimmed : `${trimmed} 문의`;
+}
+
+export function normalizeInquiryTypes(values: readonly unknown[] | null | undefined): string[] {
+  const normalized = (values ?? [])
+    .filter((value): value is string => typeof value === "string")
+    .map(normalizeInquiryTypeLabel)
+    .filter((value, index, all) => value && all.indexOf(value) === index)
+    .slice(0, 20);
+  return normalized.length ? normalized : [...DEFAULT_INQUIRY_TYPES];
+}
 
 export interface DistributionTarget {
   platform: Platform;
@@ -93,6 +109,7 @@ export interface AppSettings {
   imageMaxEdge: number;
   imageQuality: number;
   imageTargetKb: number;
+  inquiryTypes: string[];
   publicAddressPolicy: Record<Platform, AddressPolicy>;
 }
 
@@ -138,5 +155,6 @@ export const defaultSettings: AppSettings = {
   imageMaxEdge: 1920,
   imageQuality: 82,
   imageTargetKb: 800,
+  inquiryTypes: [...DEFAULT_INQUIRY_TYPES],
   publicAddressPolicy: { naver: "district", instagram: "district", daangn: "district", zigbang: "lot" },
 };

@@ -83,6 +83,12 @@ Set-ExecutionPolicy -Scope Process Bypass
 
    `barjeong.vercel.app`의 왼쪽 실행기 카드가 **온라인**(실행기가 5초마다 heartbeat)이면 연결 완료입니다. 이때부터 사진 최적화와 플랫폼 발행은 같은 실행기가 순서대로 처리합니다.
 
+   매번 직접 켜지 않으려면 한 번만 아래 명령을 실행합니다. 이후 Windows 로그인 때 웹서버 없이 실행기만 백그라운드로 시작됩니다. `bootstrap-windows.ps1`로 최초 설치하면 이 등록도 자동으로 수행됩니다.
+
+   ```powershell
+   .\scripts\install-runner-autostart.ps1
+   ```
+
 연결 상태 점검 명령 (값은 출력하지 않음):
 
 ```powershell

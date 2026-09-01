@@ -59,6 +59,19 @@ describe("BarjungApp administrator workflows (demo mode)", () => {
     expect(screen.getByText(/검색 결과를 선택해 주세요/)).toBeInTheDocument();
   });
 
+  it("설정에서 추가한 문의 유형을 고객 등록에 사용한다", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ status: "expired", message: "로그인 필요" }), { status: 200 })));
+    await openApp();
+    fireEvent.click(screen.getByRole("button", { name: "설정" }));
+    fireEvent.change(screen.getByLabelText("새 문의 유형"), { target: { value: "상가 임대" } });
+    fireEvent.click(screen.getByRole("button", { name: /추가/ }));
+    expect(await screen.findByText("상가 임대 문의")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "고객관리" }));
+    fireEvent.click(screen.getByRole("button", { name: /고객 등록/ }));
+    expect(screen.getByRole("option", { name: "상가 임대 문의" })).toBeInTheDocument();
+  });
+
   it("registers a property from the wizard with the typed title", async () => {
     await openApp();
     fireEvent.click(screen.getByRole("button", { name: /매물관리/ }));

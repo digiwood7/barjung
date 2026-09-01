@@ -1,4 +1,4 @@
-import { PLATFORMS, defaultSettings } from "@/lib/domain/types";
+import { PLATFORMS, defaultSettings, normalizeInquiryTypes } from "@/lib/domain/types";
 import type {
   AddressPolicy, AgentStatus, AppSettings, Customer, DistributionTarget, Employee, EmploymentStatus,
   LegalDisclosure, Platform, Property, PropertyKind, PropertyStatus, PublishStatus,
@@ -271,12 +271,14 @@ export function customerToRow(input: Partial<Omit<Customer, "id">> & { followUpA
 
 // ---- 설정·실행기 ----
 export function settingsFromRow(row: SettingsRow | null | undefined): AppSettings {
-  const policy = (row?.platform_settings as { address_policy?: Partial<Record<Platform, AddressPolicy>> } | null)?.address_policy ?? {};
+  const platformSettings = row?.platform_settings as { address_policy?: Partial<Record<Platform, AddressPolicy>>; inquiry_types?: string[] } | null;
+  const policy = platformSettings?.address_policy ?? {};
   return {
     publishMode: row?.publish_mode ?? defaultSettings.publishMode,
     imageMaxEdge: row?.image_max_edge ?? defaultSettings.imageMaxEdge,
     imageQuality: row?.image_quality ?? defaultSettings.imageQuality,
     imageTargetKb: row?.image_target_kb ?? defaultSettings.imageTargetKb,
+    inquiryTypes: normalizeInquiryTypes(platformSettings?.inquiry_types),
     publicAddressPolicy: { ...defaultSettings.publicAddressPolicy, ...policy },
   };
 }
@@ -284,7 +286,7 @@ export function settingsToRow(settings: AppSettings, officeId: string): Settings
   return {
     office_id: officeId, publish_mode: settings.publishMode, image_max_edge: settings.imageMaxEdge,
     image_quality: settings.imageQuality, image_target_kb: settings.imageTargetKb,
-    platform_settings: { address_policy: settings.publicAddressPolicy },
+    platform_settings: { address_policy: settings.publicAddressPolicy, inquiry_types: normalizeInquiryTypes(settings.inquiryTypes) },
   };
 }
 

@@ -19,4 +19,12 @@ if (-not (Test-Path ".env.local")) {
   Write-Host ".env.local 예제 파일을 만들었습니다. 고객 계정값은 배포 전에 직접 입력하세요."
 }
 
-Write-Host "설치 완료. .\scripts\start-local.ps1 을 실행하세요."
+& "$PSScriptRoot\install-runner-autostart.ps1"
+. "$PSScriptRoot\import-project-env.ps1"
+if ($env:SUPABASE_URL -and $env:SUPABASE_SERVICE_ROLE_KEY -and $env:BARJUNG_AGENT_ID) {
+  Start-ScheduledTask -TaskName "Barjung Windows Runner"
+  Write-Host "설치 완료. Windows 실행기를 백그라운드로 시작했습니다. barjeong.vercel.app을 사용하세요."
+} else {
+  Write-Host "설치 완료. .env.local 값을 채운 뒤 .\scripts\start-runner.ps1 을 한 번 실행하세요."
+}
+Write-Host "localhost 웹서버는 필요하지 않습니다."

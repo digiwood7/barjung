@@ -2,12 +2,23 @@
 
 import { Check, X } from "lucide-react";
 import { useState } from "react";
-import { PLATFORMS } from "@/lib/domain/types";
+import { DEFAULT_INQUIRY_TYPES, PLATFORMS } from "@/lib/domain/types";
 import type { Customer, Employee, Property, WorkspaceMode } from "@/lib/domain/types";
 import { toKstInputValue } from "@/lib/supabase/mappers";
 import { platformName } from "./ui";
 
 export type NewEntityValues = { name: string; phone: string; detail: string; note: string };
+
+function formatPhoneNumber(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+}
+
+function isCompletePhone(value: string): boolean {
+  return /^\d{3}-\d{4}-\d{4}$/.test(value);
+}
 
 function ModalFrame({ eyebrow, title, onClose, children, actions }: { eyebrow: string; title: string; onClose: () => void; children: React.ReactNode; actions: React.ReactNode }) {
   return (
@@ -19,16 +30,16 @@ function ModalFrame({ eyebrow, title, onClose, children, actions }: { eyebrow: s
   );
 }
 
-export function SimpleFormModal({ type, busy, error, onClose, onSave }: { type: "customer" | "employee"; busy?: boolean; error?: string; onClose: () => void; onSave: (values: NewEntityValues) => void }) {
-  const [values, setValues] = useState<NewEntityValues>({ name: "", phone: "010-", detail: type === "customer" ? "원룸 문의" : "중개보조원", note: "" });
+export function SimpleFormModal({ type, inquiryTypes = DEFAULT_INQUIRY_TYPES, busy, error, onClose, onSave }: { type: "customer" | "employee"; inquiryTypes?: readonly string[]; busy?: boolean; error?: string; onClose: () => void; onSave: (values: NewEntityValues) => void }) {
+  const [values, setValues] = useState<NewEntityValues>({ name: "", phone: "", detail: type === "customer" ? inquiryTypes[0] ?? DEFAULT_INQUIRY_TYPES[0] : "중개보조원", note: "" });
   const set = (key: keyof NewEntityValues, value: string) => setValues((current) => ({ ...current, [key]: value }));
   return (
     <ModalFrame eyebrow={`NEW ${type.toUpperCase()}`} title={type === "customer" ? "고객 등록" : "직원 등록"} onClose={onClose}
-      actions={<div className="modal-actions"><span className="form-error">{error}</span><button className="secondary" onClick={onClose}>취소</button><button className="primary" disabled={busy || !values.name.trim() || !values.phone.trim()} onClick={() => onSave(values)}><Check size={15} /> {busy ? "저장 중" : "등록"}</button></div>}>
+      actions={<div className="modal-actions"><span className="form-error">{error}</span><button className="secondary" onClick={onClose}>취소</button><button className="primary" disabled={busy || !values.name.trim() || !isCompletePhone(values.phone)} onClick={() => onSave(values)}><Check size={15} /> {busy ? "저장 중" : "등록"}</button></div>}>
       <label>이름<input value={values.name} onChange={(event) => set("name", event.target.value)} autoFocus /></label>
-      <label>전화번호<input value={values.phone} onChange={(event) => set("phone", event.target.value)} /></label>
+      <label>전화번호<input value={values.phone} inputMode="tel" maxLength={13} placeholder="010-0000-0000" onChange={(event) => set("phone", formatPhoneNumber(event.target.value))} /></label>
       {type === "customer"
-        ? <><label>문의 유형<select value={values.detail} onChange={(event) => set("detail", event.target.value)}><option>원룸 문의</option><option>투룸 문의</option><option>오피스텔 문의</option></select></label><label>희망 조건<textarea value={values.note} onChange={(event) => set("note", event.target.value)} placeholder="예: 북문, 월 45만원 이하, 채광 우선" /></label></>
+        ? <><label>문의 유형<select value={values.detail} onChange={(event) => set("detail", event.target.value)}>{inquiryTypes.map((inquiryType) => <option key={inquiryType}>{inquiryType}</option>)}</select></label><label>희망 조건<textarea value={values.note} onChange={(event) => set("note", event.target.value)} placeholder="예: 북문, 월 45만원 이하, 채광 우선" /></label></>
         : <label>직책<select value={values.detail} onChange={(event) => set("detail", event.target.value)}><option>중개보조원</option><option>현장 매니저</option><option>공인중개사</option><option>대표 공인중개사</option></select></label>}
     </ModalFrame>
   );
@@ -50,11 +61,12 @@ export function EditEntityModal({ entity, mode, busy, error, onClose, onSave, on
   const change = (key: string, value: string | null) => setDraft((current) => ({ ...current, [key]: value }));
   const customerDraft = draft as Customer;
   const employeeDraft = draft as Employee;
+  const phoneComplete = isCompletePhone(draft.phone);
   return (
     <ModalFrame eyebrow={`EDIT ${customer ? "CUSTOMER" : "EMPLOYEE"}`} title={customer ? "고객 정보 수정" : "직원 정보 수정"} onClose={onClose}
-      actions={<div className="modal-actions split-actions"><button className="danger-button" onClick={onDelete} disabled={busy}>삭제</button><span className="form-error">{error}</span><button className="secondary" onClick={onClose}>취소</button><button className="primary" disabled={busy} onClick={() => onSave(draft)}><Check size={15} /> {busy ? "저장 중" : "변경사항 저장"}</button></div>}>
+      actions={<div className="modal-actions split-actions"><button className="danger-button" onClick={onDelete} disabled={busy}>삭제</button><span className="form-error">{error}</span><button className="secondary" onClick={onClose}>취소</button><button className="primary" disabled={busy || !draft.name.trim() || !phoneComplete} onClick={() => onSave(draft)}><Check size={15} /> {busy ? "저장 중" : "변경사항 저장"}</button></div>}>
       <label>이름<input value={draft.name} onChange={(event) => change("name", event.target.value)} /></label>
-      <label>전화번호<input value={draft.phone} onChange={(event) => change("phone", event.target.value)} /></label>
+      <label>전화번호<input value={draft.phone} inputMode="tel" maxLength={13} placeholder="010-0000-0000" onChange={(event) => change("phone", formatPhoneNumber(event.target.value))} /></label>
       {customer ? (
         <>
           <label>희망 매물<input value={customerDraft.interest} onChange={(event) => change("interest", event.target.value)} /></label>
@@ -90,7 +102,7 @@ export function EditPropertyModal({ property, employees, busy, error, onClose, o
   return (
     <div className="modal-backdrop"><div className="simple-modal property-edit-modal" role="dialog" aria-modal="true">
       <div className="wizard-head"><div><span className="eyebrow">EDIT PROPERTY</span><h2>매물 정보 수정</h2></div><button aria-label="닫기" className="icon-button" onClick={onClose}><X size={20} /></button></div>
-      <div className="simple-form">
+      <div className="simple-form property-edit-scroll" role="region" aria-label="매물 정보 수정 항목">
         <label>매물 제목<input value={draft.title} onChange={(event) => change("title", event.target.value)} /></label>
         <label>매물 유형<select value={draft.type} onChange={(event) => change("type", event.target.value as Property["type"])}><option>원룸</option><option>투룸</option><option>오피스텔</option></select></label>
         <label>상태<select value={draft.status} onChange={(event) => change("status", event.target.value as Property["status"])}><option>등록 대기</option><option>검토 완료</option><option>광고 중</option><option>계약 진행</option><option>거래 완료</option><option>보류</option><option>종료</option></select></label>

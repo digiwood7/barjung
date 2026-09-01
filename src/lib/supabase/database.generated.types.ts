@@ -943,6 +943,63 @@ export type Database = {
           },
         ]
       }
+      runner_commands: {
+        Row: {
+          command: string
+          completed_at: string | null
+          created_at: string
+          id: string
+          lease_agent_id: string | null
+          lease_expires_at: string | null
+          office_id: string
+          result_message: string | null
+          started_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          command: string
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          lease_agent_id?: string | null
+          lease_expires_at?: string | null
+          office_id: string
+          result_message?: string | null
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          command?: string
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          lease_agent_id?: string | null
+          lease_expires_at?: string | null
+          office_id?: string
+          result_message?: string | null
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "runner_commands_lease_agent_id_fkey"
+            columns: ["lease_agent_id"]
+            isOneToOne: false
+            referencedRelation: "local_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "runner_commands_office_id_fkey"
+            columns: ["office_id"]
+            isOneToOne: false
+            referencedRelation: "offices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       property_status_history: {
         Row: {
           changed_at: string
@@ -1047,6 +1104,28 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "media_optimization_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_runner_command: {
+        Args: { p_agent_id: string; p_lease_seconds?: number }
+        Returns: {
+          command: string
+          completed_at: string | null
+          created_at: string
+          id: string
+          lease_agent_id: string | null
+          lease_expires_at: string | null
+          office_id: string
+          result_message: string | null
+          started_at: string | null
+          status: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "runner_commands"
           isOneToOne: false
           isSetofReturn: true
         }
