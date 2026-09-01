@@ -93,6 +93,7 @@ describe("BarjungApp administrator workflows (demo mode)", () => {
   });
 
   it("edits and deletes a property from its detail", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
     await openApp();
     fireEvent.click(await screen.findByRole("button", { name: /260829-01.*북문 3분/ }));
     fireEvent.click(screen.getByRole("button", { name: "매물 수정" }));

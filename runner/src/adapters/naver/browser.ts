@@ -68,11 +68,8 @@ export async function openNaverContext(options: NaverBrowserOptions): Promise<Br
 
 export interface LoginCheck { ok: boolean; reason: string }
 
-/**
- * 로그인 상태 저장 검증 — DGagent login_and_save 의 세 단계 이식.
- * ① NID_AUT + NID_SES 둘 다 있을 것 ② 영구 쿠키일 것(로그인 상태 유지 체크) ③ 글쓰기 페이지가 로그인 화면으로 안 튕길 것
- */
-export async function verifyNaverLogin(context: BrowserContext): Promise<LoginCheck> {
+/** 주기 상태 확인용. 저장된 네이버 인증 쿠키만 확인하며 글쓰기 페이지는 열지 않는다. */
+export async function verifyNaverSession(context: BrowserContext): Promise<LoginCheck> {
   const need = ["NID_AUT", "NID_SES"];
   const cookies = await context.cookies();
   const byName = new Map(cookies.map((cookie) => [cookie.name, cookie]));
@@ -80,6 +77,16 @@ export async function verifyNaverLogin(context: BrowserContext): Promise<LoginCh
   if (missing.length) return { ok: false, reason: `쿠키 없음: ${missing.join(", ")}` };
   const temporary = need.filter((name) => (byName.get(name)?.expires ?? -1) <= 0);
   if (temporary.length) return { ok: false, reason: `${temporary.join(", ")} 가 임시 쿠키입니다 — 로그인 화면의 '로그인 상태 유지'에 체크하고 다시 로그인하세요.` };
+  return { ok: true, reason: "저장된 로그인 세션 확인" };
+}
+
+/**
+ * 로그인 상태 저장 검증 — DGagent login_and_save 의 세 단계 이식.
+ * ① NID_AUT + NID_SES 둘 다 있을 것 ② 영구 쿠키일 것(로그인 상태 유지 체크) ③ 글쓰기 페이지가 로그인 화면으로 안 튕길 것
+ */
+export async function verifyNaverLogin(context: BrowserContext): Promise<LoginCheck> {
+  const session = await verifyNaverSession(context);
+  if (!session.ok) return session;
   const page = await context.newPage();
   try {
     await page.goto(NAVER_WRITE_URL, { waitUntil: "domcontentloaded" });

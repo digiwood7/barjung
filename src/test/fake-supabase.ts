@@ -113,6 +113,15 @@ class Query implements PromiseLike<Result> {
 
 export class FakeSupabase {
   private tables = new Map<string, Row[]>();
+  readonly removedStorage: Array<{ bucket: string; paths: string[] }> = [];
+  readonly storage = {
+    from: (bucket: string) => ({
+      remove: async (paths: string[]) => {
+        this.removedStorage.push({ bucket, paths: [...paths] });
+        return { data: paths, error: null };
+      },
+    }),
+  };
   constructor(readonly options: FakeOptions = {}) {}
   rows(table: string): Row[] { if (!this.tables.has(table)) this.tables.set(table, []); return this.tables.get(table)!; }
   replace(table: string, rows: Row[]) { this.tables.set(table, rows); }

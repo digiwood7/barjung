@@ -160,7 +160,7 @@ describe("PropertyWizard 사진 최적화 단계", () => {
     fireEvent.click(screen.getByRole("button", { name: /등록 확인/ }));
     expect(screen.getByRole("button", { name: "플랫폼 발행" })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: /변경사항 저장/ }));
-    await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.any(Object), files, properties[0].id));
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.any(Object), files, properties[0].id, expect.any(Function)));
     expect(screen.getByText("매물과 최적화 사진 2장을 저장했습니다.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "플랫폼 발행" }));
     expect(onPublish).toHaveBeenCalledWith(properties[0].id);
@@ -179,5 +179,17 @@ describe("PropertyWizard 사진 최적화 단계", () => {
     await waitFor(() => expect(onSave).toHaveBeenCalled());
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "플랫폼 발행" })).toBeEnabled();
+  });
+
+  it("매물 삭제 전에 경고하고 확인한 경우에만 DB 삭제를 요청한다", async () => {
+    const onDelete = vi.fn(async () => undefined);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    render(<PropertyWizard mode="live" employees={[]} property={properties[0]} onClose={() => undefined} onSave={noopSave} onDelete={onDelete} onPublish={noopPublish} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "매물 삭제" }));
+    expect(onDelete).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "매물 삭제" }));
+    await waitFor(() => expect(onDelete).toHaveBeenCalledWith(properties[0].id));
+    expect(confirm).toHaveBeenCalledTimes(2);
   });
 });

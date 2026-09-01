@@ -17,6 +17,12 @@ import {
 export type NewRecord<T extends { id: string }> = Omit<T, "id">;
 export type PatchRecord<T extends { id: string }> = Partial<Omit<T, "id">>;
 
+export interface MediaUploadProgress {
+  phase: "transferring" | "optimizing" | "complete";
+  processed: number;
+  total: number;
+}
+
 export interface CrudRepository<T extends { id: string }> {
   list(): Promise<T[]>;
   create(input: NewRecord<T>): Promise<T>;
@@ -36,7 +42,7 @@ export interface BarjungRepository {
   customers: CrudRepository<Customer>;
   getProperty(id: string): Promise<Property | null>;
   /** 로컬 Python으로 사진을 최적화한 뒤 고객 Storage에 저장한다. */
-  uploadPropertyMedia(propertyId: string, files: File[]): Promise<Property>;
+  uploadPropertyMedia(propertyId: string, files: File[], onProgress?: (progress: MediaUploadProgress) => void): Promise<Property>;
   /** 플랫폼 배포 작업을 만든다(생략하면 4개 전부). 라이브 모드에서는 Windows 실행기가 큐를 가져간다. */
   requestDistribution(propertyId: string, platforms?: Platform[]): Promise<Property>;
   updateSettings(patch: Partial<AppSettings>): Promise<AppSettings>;

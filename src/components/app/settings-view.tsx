@@ -1,9 +1,10 @@
 "use client";
 
-import { Bot, Database, Plus, RefreshCcw, X, Zap } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { Bot, Database, Plus, X, Zap } from "lucide-react";
+import { useState } from "react";
 import { normalizeInquiryTypeLabel, PLATFORMS } from "@/lib/domain/types";
-import type { AddressPolicy, AgentStatus, AppSettings, OfficeInfo, Property, WorkspaceMode } from "@/lib/domain/types";
+import type { AddressPolicy, AgentStatus, AppSettings, OfficeInfo, PlatformConnection, Property, WorkspaceMode } from "@/lib/domain/types";
+import { PlatformConnectionCards } from "./platform-connection-cards";
 import { Badge, platformInitial, platformName } from "./ui";
 
 const policyLabel: Record<AddressPolicy, string> = { district: "동까지만 공개", lot: "전체 주소", hidden: "주소 비공개" };
@@ -11,65 +12,20 @@ const policyLabel: Record<AddressPolicy, string> = { district: "동까지만 공
 interface SettingsViewProps {
   settings: AppSettings;
   agent: AgentStatus;
+  connections?: PlatformConnection[];
   office: OfficeInfo;
   mode: WorkspaceMode;
   properties: Property[];
+  onRefresh?: () => Promise<void>;
   onUpdate: (patch: Partial<AppSettings>) => Promise<unknown>;
 }
 
-export function SettingsView({ settings, agent, office, mode, properties, onUpdate }: SettingsViewProps) {
+export function SettingsView({ settings, agent, connections = [], office, mode, properties, onRefresh, onUpdate }: SettingsViewProps) {
   const [showConnection, setShowConnection] = useState(false);
-  const [naverStatus, setNaverStatus] = useState<"checking" | "connected" | "expired" | "action_required" | "local_required">("checking");
-  const [naverMessage, setNaverMessage] = useState("네이버 로그인 상태를 확인하는 중입니다.");
-  const [naverBusy, setNaverBusy] = useState(false);
-  const [naverLoginRequested, setNaverLoginRequested] = useState(false);
   const [inquiryDraft, setInquiryDraft] = useState("");
   const photoCount = properties.reduce((sum, property) => sum + property.photos, 0);
   const auto = settings.publishMode === "automatic";
 
-  const checkNaver = useCallback(async () => {
-    setNaverStatus("checking");
-    try {
-      const response = await fetch("/api/naver/session", { cache: "no-store" });
-      const payload = await response.json() as { status?: typeof naverStatus; message?: string };
-      setNaverStatus(payload.status || "action_required");
-      setNaverMessage(payload.message || "네이버 로그인 상태를 확인하지 못했습니다.");
-    } catch {
-      setNaverStatus("action_required");
-      setNaverMessage("로컬 Windows 실행기와 연결하지 못했습니다.");
-    }
-  }, []);
-
-  useEffect(() => { checkNaver().catch(() => undefined); }, [checkNaver]);
-  useEffect(() => {
-    if (!naverLoginRequested || naverStatus === "connected") return;
-    const timer = window.setInterval(() => { checkNaver().catch(() => undefined); }, 5000);
-    return () => window.clearInterval(timer);
-  }, [checkNaver, naverLoginRequested, naverStatus]);
-
-  useEffect(() => {
-    if (naverStatus === "connected" || naverStatus === "expired") setNaverLoginRequested(false);
-  }, [naverStatus]);
-
-  const openNaverLogin = async () => {
-    setNaverBusy(true);
-    try {
-      const response = await fetch("/api/naver/session", { method: "POST" });
-      const payload = await response.json() as { status?: typeof naverStatus; message?: string };
-      setNaverStatus(payload.status || "action_required");
-      setNaverMessage(payload.message || "네이버 로그인 창을 확인하세요.");
-      if (response.ok) setNaverLoginRequested(true);
-    } catch {
-      setNaverStatus("action_required");
-      setNaverMessage("Windows 실행기에 네이버 로그인 요청을 보내지 못했습니다.");
-      setNaverLoginRequested(false);
-    } finally {
-      setNaverBusy(false);
-    }
-  };
-
-  const naverConnected = naverStatus === "connected";
-  const naverLocalOnly = naverStatus === "local_required";
   const addInquiryType = async (event: React.FormEvent) => {
     event.preventDefault();
     const inquiryType = normalizeInquiryTypeLabel(inquiryDraft);
@@ -103,14 +59,7 @@ export function SettingsView({ settings, agent, office, mode, properties, onUpda
             </dl>
           )}
         </div>
-        <div className="panel setting-card span-2 naver-session-card">
-          <div className={`setting-icon ${naverConnected ? "green" : naverStatus === "checking" || naverLocalOnly ? "blue" : "red"}`}><span className="platform-logo naver">N</span></div>
-          <div><h3>네이버 블로그 로그인</h3><p>{naverMessage}</p><Badge tone={naverConnected ? "green" : naverStatus === "checking" || naverLocalOnly ? "amber" : "red"}><span className={`live-dot ${naverConnected ? "online" : naverStatus === "checking" || naverLocalOnly ? "degraded" : "offline"}`} /> {naverConnected ? "로그인 유지 중" : naverLocalOnly ? "로컬 PC에서 확인" : naverStatus === "checking" ? "확인 중" : "재로그인 필요"}</Badge></div>
-          <div className="naver-session-actions">
-            <button className="secondary" onClick={() => checkNaver()} disabled={naverBusy || naverStatus === "checking"}><RefreshCcw size={14} /> 상태 확인</button>
-            <button className="primary" onClick={openNaverLogin} disabled={naverBusy || naverLoginRequested || naverConnected}>{naverConnected ? "로그인 완료" : naverBusy ? "요청 중" : naverLoginRequested ? "로그인 진행 중" : "네이버 로그인"}</button>
-          </div>
-        </div>
+        <PlatformConnectionCards connections={connections} onRefresh={onRefresh} />
         <div className="panel setting-card">
           <div className="setting-icon blue"><Database size={20} /></div>
           <div><h3>Supabase 저장공간</h3><p>최적화 사진만 저장합니다.</p><div className="storage-bar"><i style={{ width: `${Math.min(100, photoCount)}%` }} /></div><small>{mode === "live" ? `최적화 사진 ${photoCount}장 저장됨` : "데모 모드 — 저장공간 집계 없음"}</small></div>

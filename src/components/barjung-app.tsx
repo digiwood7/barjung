@@ -54,7 +54,7 @@ export function BarjungApp({ repository }: { repository?: BarjungRepository } = 
     return <div className="app-loading"><span className="live-dot" /><strong>작업 공간을 불러오는 중입니다</strong><small>고객 Supabase 연결을 확인합니다.</small></div>;
   }
 
-  const { mode, readOnly, office, agent, settings, properties, employees, customers } = snapshot;
+  const { mode, readOnly, office, agent, connections = [], settings, properties, employees, customers } = snapshot;
   const selected = selectedId ? properties.find((property) => property.id === selectedId) ?? null : null;
   const editingProperty = editingPropertyId ? properties.find((property) => property.id === editingPropertyId) ?? null : null;
   const distribution = distributionRequest ? properties.find((property) => property.id === distributionRequest.id) ?? null : null;
@@ -72,18 +72,18 @@ export function BarjungApp({ repository }: { repository?: BarjungRepository } = 
           {view === "properties" && <PropertiesView properties={properties} mode={mode} onSelect={(property) => setSelectedId(property.id)} onNew={() => { setEditingPropertyId(null); setWizard(true); }} />}
           {view === "customers" && <CustomersView customers={customers} onAdd={() => { setFormError(""); setForm({ type: "customer" }); }} onEdit={(customer) => { setFormError(""); setEditing(customer); }} />}
           {view === "employees" && <EmployeesView employees={employees} properties={properties} onAdd={() => { setFormError(""); setForm({ type: "employee" }); }} onEdit={(employee) => { setFormError(""); setEditing(employee); }} />}
-          {view === "settings" && <SettingsView settings={settings} agent={agent} office={office} mode={mode} properties={properties} onUpdate={(patch) => run(async () => { await actions.updateSettings(patch); }, "설정을 저장했습니다.")} />}
+          {view === "settings" && <SettingsView settings={settings} agent={agent} connections={connections} office={office} mode={mode} properties={properties} onRefresh={actions.refresh} onUpdate={(patch) => run(async () => { await actions.updateSettings(patch); }, "설정을 저장했습니다.")} />}
         </div>
       </main>
 
       {selected && <PropertyDetail property={selected} office={office} mode={mode} onClose={() => setSelectedId(null)} onPublish={() => { setDistributionRequest({ id: selected.id }); setSelectedId(null); }} onEdit={() => { setFormError(""); setEditingPropertyId(selected.id); setSelectedId(null); setWizard(true); }} />}
-      {wizard && <PropertyWizard mode={mode} employees={employees} property={editingProperty ?? undefined} onClose={() => { setWizard(false); if (editingPropertyId) setSelectedId(editingPropertyId); setEditingPropertyId(null); }} onSave={async (input, photos, propertyId) => {
+      {wizard && <PropertyWizard mode={mode} employees={employees} property={editingProperty ?? undefined} onClose={() => { setWizard(false); if (editingPropertyId) setSelectedId(editingPropertyId); setEditingPropertyId(null); }} onSave={async (input, photos, propertyId, onProgress) => {
         const creating = !propertyId;
         let saved = propertyId
           ? await actions.updateProperty(propertyId, { ...input, updatedAt: "방금 전" })
           : await actions.createProperty(input);
         try {
-          if (mode === "live" && photos.length) saved = await actions.uploadPropertyMedia(saved.id, photos);
+          if (mode === "live" && photos.length) saved = await actions.uploadPropertyMedia(saved.id, photos, onProgress);
         } catch (error) {
           if (creating) await actions.removeProperty(saved.id).catch(() => undefined);
           throw error;

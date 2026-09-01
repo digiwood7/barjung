@@ -128,6 +128,14 @@ export interface AgentStatus {
   label: string;
 }
 
+export type PlatformConnectionStatus = "connected" | "expired" | "action_required" | "not_configured";
+
+export interface PlatformConnection {
+  platform: Platform;
+  status: PlatformConnectionStatus;
+  lastCheckedAt: string | null;
+}
+
 export type WorkspaceMode = "demo" | "live";
 
 export interface WorkspaceSnapshot {
@@ -135,6 +143,7 @@ export interface WorkspaceSnapshot {
   readOnly: boolean;
   office: OfficeInfo;
   agent: AgentStatus;
+  connections?: PlatformConnection[];
   settings: AppSettings;
   properties: Property[];
   employees: Employee[];

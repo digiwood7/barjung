@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { BuildingRegisterLookupResult } from "@/lib/building-register/types";
 import type { ParcelAddressInput } from "@/lib/building-register/types";
 import { validateDisclosure } from "@/lib/domain/legal-disclosure";
-import type { NewRecord } from "@/lib/domain/repository";
+import type { MediaUploadProgress, NewRecord } from "@/lib/domain/repository";
 import { PLATFORMS } from "@/lib/domain/types";
 import type { Employee, LegalDisclosure, Platform, Property, PropertyKind, WorkspaceMode } from "@/lib/domain/types";
 import { accentFor, areaLabel } from "@/lib/supabase/mappers";
@@ -68,7 +68,7 @@ interface PropertyWizardProps {
   employees: Employee[];
   property?: Property;
   onClose: () => void;
-  onSave: (input: NewRecord<Property>, photos: File[], propertyId?: string) => Promise<Property>;
+  onSave: (input: NewRecord<Property>, photos: File[], propertyId?: string, onProgress?: (progress: MediaUploadProgress) => void) => Promise<Property>;
   onDelete?: (propertyId: string) => Promise<void>;
   onPublish: (propertyId: string) => void;
 }
@@ -115,6 +115,7 @@ export function PropertyWizard({ mode, employees, property, onClose, onSave, onD
   const [existingPhotoCount, setExistingPhotoCount] = useState(property?.photos ?? 0);
   const [photos, setPhotos] = useState<File[]>([]);
   const [photoRestoreNotice, setPhotoRestoreNotice] = useState(false);
+  const [mediaProgress, setMediaProgress] = useState<MediaUploadProgress | null>(null);
 
   const changeMaintenance = (value: string) => {
     const digits = value.replace(/[^\d]/g, "");
@@ -252,9 +253,9 @@ export function PropertyWizard({ mode, employees, property, onClose, onSave, onD
       photos: property?.photos ?? (demo ? 10 : 0), accent: property?.accent ?? accentFor(`${title}${address}${Date.now()}`), employeeCopy: copies.naver, copies: { ...copies }, disclosure,
       targets: property?.targets ?? PLATFORMS.map((platform) => ({ platform, status: "not_requested", progress: 0 })),
     };
-    setSaving(true); setSaveError(""); setSaveSuccess("");
+    setSaving(true); setSaveError(""); setSaveSuccess(""); setMediaProgress(photos.length ? { phase: "transferring", processed: 0, total: photos.length } : null);
     try {
-      const saved = await onSave(input, photos, persistedProperty?.id ?? property?.id);
+      const saved = await onSave(input, photos, persistedProperty?.id ?? property?.id, photos.length ? setMediaProgress : undefined);
       setPersistedProperty(saved);
       setExistingPhotoCount(saved.photos);
       setPhotos([]);
@@ -262,12 +263,13 @@ export function PropertyWizard({ mode, employees, property, onClose, onSave, onD
       if (typeof window !== "undefined") window.localStorage.removeItem(PROPERTY_DRAFT_KEY);
     }
     catch (error) { setSaveError(error instanceof Error ? error.message : "매물을 저장하지 못했습니다."); }
-    finally { setSaving(false); }
+    finally { setSaving(false); setMediaProgress(null); }
   };
 
   const removeProperty = async () => {
     const id = persistedProperty?.id ?? property?.id;
     if (!id || !onDelete) return;
+    if (!window.confirm("정말 삭제하시겠습니까?\n매물 DB와 Supabase 사진은 삭제되지만 이미 발행된 플랫폼 게시물은 유지됩니다.")) return;
     setSaving(true); setSaveError(""); setSaveSuccess("");
     try { await onDelete(id); }
     catch (error) { setSaveError(error instanceof Error ? error.message : "매물을 삭제하지 못했습니다."); }
@@ -276,6 +278,7 @@ export function PropertyWizard({ mode, employees, property, onClose, onSave, onD
 
   return (
     <div className="modal-backdrop"><div className="wizard-modal" role="dialog" aria-modal="true">
+      {saving && mediaProgress && <div className="media-optimization-overlay" role="status" aria-live="polite"><div className="media-optimization-dialog"><div className="media-progress-ring" style={{ background: `conic-gradient(var(--green) ${mediaProgress.total ? Math.round((mediaProgress.processed / mediaProgress.total) * 100) : 0}%, #e4ece8 0)` }}><span>{mediaProgress.processed}<small>/ {mediaProgress.total}</small></span></div><h3>{mediaProgress.phase === "transferring" ? "사진을 로컬 실행기로 전달 중" : mediaProgress.phase === "complete" ? "최적화 사진 저장 완료" : "Python 사진 최적화 중"}</h3><p>원본은 고객 PC에서 처리하며 최적화된 JPEG만 Supabase에 저장합니다.</p></div></div>}
       {recoveryDraft && <div className="draft-recovery-overlay" role="alertdialog" aria-modal="true" aria-labelledby="draft-recovery-title"><div className="draft-recovery-box"><FileCheck2 size={28} /><h3 id="draft-recovery-title">작성 중인 값을 불러올까요?</h3><p>저장되지 않은 매물 정보와 진행 단계를 복원합니다.{recoveryDraft.hadPhotos ? " 사진 파일은 보안상 다시 선택해야 합니다." : ""}</p><div><button type="button" className="secondary" onClick={discardDraft}>아니오, 새로 작성</button><button type="button" className="primary" onClick={restoreDraft}>예, 이전 값 불러오기</button></div></div></div>}
       <div className="wizard-head"><div><span className="eyebrow">PROPERTY EDITOR</span><h2>{persistedProperty ? "매물 등록·수정" : "새 매물 등록"}</h2></div><button className="icon-button" aria-label="닫기" onClick={closeWizard}><X size={20} /></button></div>
       <div className="wizard-steps">{steps.map((label, index) => <button type="button" key={label} aria-current={index === step ? "step" : undefined} className={index === step ? "active" : index < step ? "done" : ""} onClick={() => setStep(index)}><span>{index < step ? <Check size={13} /> : index + 1}</span><small>{label}</small></button>)}</div>

@@ -67,9 +67,9 @@ export async function resolvePublishedUrlViaRss(blogId: string, title: string, a
   return undefined;
 }
 
-function defaultSessionFactory(config: NaverAdapterConfig): SessionFactory {
+function defaultSessionFactory(config: NaverAdapterConfig, headless: boolean): SessionFactory {
   return async () => {
-    const context: BrowserContext = await openNaverContext({ profileDir: config.profileDir, headless: config.headless, channel: config.channel });
+    const context: BrowserContext = await openNaverContext({ profileDir: config.profileDir, headless, channel: config.channel });
     await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: "https://blog.naver.com" }).catch(() => undefined);
     const page = await context.newPage();
     return { page, close: async () => { await sleep(2000); await context.close().catch(() => undefined); } };
@@ -78,24 +78,26 @@ function defaultSessionFactory(config: NaverAdapterConfig): SessionFactory {
 
 export class NaverBlogAdapter implements PlatformAdapter {
   readonly platform = "naver" as const;
-  private readonly openSession: SessionFactory;
+  private readonly openPublishSession: SessionFactory;
+  private readonly openCheckSession: SessionFactory;
   private readonly resolveUrl: UrlResolver;
 
   constructor(
     private readonly config: NaverAdapterConfig,
-    overrides: { session?: SessionFactory; resolveUrl?: UrlResolver } = {},
+    overrides: { session?: SessionFactory; checkSession?: SessionFactory; resolveUrl?: UrlResolver } = {},
   ) {
-    this.openSession = overrides.session ?? defaultSessionFactory(config);
+    this.openPublishSession = overrides.session ?? defaultSessionFactory(config, config.headless);
+    // Periodic authentication checks must never flash the editor window.
+    this.openCheckSession = overrides.checkSession ?? defaultSessionFactory(config, true);
     this.resolveUrl = overrides.resolveUrl ?? (async (title) => (config.blogId ? resolvePublishedUrlViaRss(config.blogId, title) : undefined));
   }
 
   async checkSession(): Promise<SessionResult> {
-    const session = await this.openSession();
+    const session = await this.openCheckSession();
     try {
-      await session.page.goto(this.config.editorUrl ?? NAVER_WRITE_URL, { waitUntil: "domcontentloaded" });
-      await sleep(Math.min(this.config.editorLoadMs ?? 8000, 5000));
-      const url = session.page.url();
-      return { status: url.includes("nid.naver.com") || url.includes("nidlogin") ? "expired" : "connected" };
+      const cookies = await session.page.context().cookies();
+      const names = new Set(cookies.map((cookie) => cookie.name));
+      return { status: names.has("NID_AUT") && names.has("NID_SES") ? "connected" : "expired" };
     } catch {
       return { status: "action_required" };
     } finally {
@@ -106,7 +108,7 @@ export class NaverBlogAdapter implements PlatformAdapter {
   async publish(input: PublishInput): Promise<PublishResult> {
     const post = composeNaverPost(input, this.config);
     if (!post.title) return { status: "failed", errorCode: "validation", errorSummary: "글 제목이 없습니다." };
-    const session = await this.openSession();
+    const session = await this.openPublishSession();
     try {
       const { page } = session;
       await page.goto(this.config.editorUrl ?? NAVER_WRITE_URL, { waitUntil: "domcontentloaded" });

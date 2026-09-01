@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createPlatformAdapters } from "./adapters/index.js";
 import { runTargets } from "./jobs/worker.js";
 import { runMediaOptimizationJob, type ClaimedMediaJob } from "./media-jobs.js";
+import { startLocalMediaServer } from "./local-media-server.js";
 import { SupabaseRunnerStore, type ClaimedTarget } from "./store.js";
 import type { PublishInput } from "./types.js";
 
@@ -24,6 +25,21 @@ type RunnerCommand = { id: string; office_id: string; command: "naver_login" };
 let activeRunnerCommandId: string | null = null;
 let lastNaverSessionCheckAt = 0;
 let runnerCommandUnavailableWarned = false;
+let localMediaServerStarted = false;
+
+function ensureLocalMediaServer(officeId: string): void {
+  if (localMediaServerStarted) return;
+  const server = startLocalMediaServer({ client: supabase, officeId });
+  server.on("error", (error) => {
+    localMediaServerStarted = false;
+    if ((error as NodeJS.ErrnoException).code === "EADDRINUSE") {
+      console.error("바를정 Windows 실행기가 이미 실행 중입니다. 중복 프로세스를 종료합니다.");
+      process.exit(0);
+    }
+    console.error(`사진 최적화 수신기 오류: ${error.message}`);
+  });
+  localMediaServerStarted = true;
+}
 
 async function updateNaverConnection(officeId: string, status: "connected" | "expired" | "action_required" | "not_configured"): Promise<void> {
   const { error } = await supabase.from("platform_connections").upsert({
@@ -112,6 +128,7 @@ async function tick(): Promise<void> {
 
   const { data: agent, error: agentError } = await supabase.from("local_agents").select("office_id").eq("id", agentId).single();
   if (agentError) throw new Error(`runner office lookup failed: ${agentError.code}`);
+  ensureLocalMediaServer(String(agent.office_id));
   await refreshNaverSession(String(agent.office_id));
 
   const { data: mediaData, error: mediaError } = await supabase.rpc("claim_media_optimization_job", { p_agent_id: agentId, p_lease_seconds: 1800 });

@@ -100,6 +100,8 @@ describe("workspace 데이터 서비스 (가짜 Supabase)", () => {
 
   it("매물 수정은 상태·금액·고지·원고 버전을 갱신하고 삭제는 하위 행까지 지운다", async () => {
     const created = await createProperty(ctx, { ...demoProperties[0], number: "", employeeCopy: "첫 원고" });
+    db.seed("property_media", [{ office_id: OFFICE, property_id: created.id, storage_path: `${OFFICE}/${created.id}/01.jpg`, sort_order: 0 }]);
+    db.seed("media_optimization_jobs", [{ office_id: OFFICE, property_id: created.id, source_files: [{ path: `${OFFICE}/${created.id}/legacy/01.jpg` }] }]);
     const updated = await updateProperty(ctx, created.id, { status: "광고 중", rent: 45, disclosure: { ...created.disclosure, direction: "" }, employeeCopy: "둘째 원고" });
     expect(updated.status).toBe("광고 중");
     expect(updated.rent).toBe(45);
@@ -110,6 +112,10 @@ describe("workspace 데이터 서비스 (가짜 Supabase)", () => {
     await deleteProperty(ctx, created.id);
     expect(await getProperty(ctx, created.id)).toBeNull();
     expect(db.rows("legal_disclosures")).toHaveLength(0);
+    expect(db.removedStorage).toEqual([
+      { bucket: "property-media", paths: [`${OFFICE}/${created.id}/01.jpg`] },
+      { bucket: "property-media-staging", paths: [`${OFFICE}/${created.id}/legacy/01.jpg`] },
+    ]);
   });
 
   it("고객·직원 CRUD 와 설정 저장이 DB 열 이름으로 왕복한다", async () => {

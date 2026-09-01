@@ -103,4 +103,30 @@ describe("네이버 에디터 조작 (모형 SmartEditor, 실제 Chromium)", () 
     expect(config.profileDir).toBe(path.join("C:\\barjung-profiles", "naver"));
     expect(config.headless).toBe(false);
   });
+
+  it("uses a separate background session for periodic login checks", async () => {
+    const publishSession = async () => { throw new Error("publish session must not open during a login check"); };
+    let checks = 0;
+    const checkSession = async () => {
+      checks += 1;
+      return {
+        page: {
+          context: () => ({
+            cookies: async () => [
+              { name: "NID_AUT", value: "test" },
+              { name: "NID_SES", value: "test" },
+            ],
+          }),
+        } as unknown as Page,
+        close: async () => undefined,
+      };
+    };
+    const adapter = new NaverBlogAdapter(
+      { ...readNaverConfig({ BARJUNG_HEADLESS: "false" }), mode: "draft", contactLines: [], hashtags: [], editorLoadMs: 1 },
+      { session: publishSession, checkSession },
+    );
+
+    await expect(adapter.checkSession()).resolves.toEqual({ status: "connected" });
+    expect(checks).toBe(1);
+  });
 });

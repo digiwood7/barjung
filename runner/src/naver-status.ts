@@ -1,4 +1,4 @@
-import { defaultProfileDir, openNaverContext, verifyNaverLogin } from "./adapters/naver/browser.js";
+import { defaultProfileDir, openNaverContext, verifyNaverSession } from "./adapters/naver/browser.js";
 
 async function main(): Promise<void> {
   const profileDir = defaultProfileDir(process.env);
@@ -10,7 +10,7 @@ async function main(): Promise<void> {
     waitMs: 1000,
   });
   try {
-    const result = await verifyNaverLogin(context);
+    const result = await verifyNaverSession(context);
     process.stdout.write(JSON.stringify({ status: result.ok ? "connected" : "expired", message: result.reason }));
   } finally {
     await context.close().catch(() => undefined);

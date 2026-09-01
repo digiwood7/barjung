@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { formatDisclosureBlock, validateDisclosure } from "@/lib/domain/legal-disclosure";
 import type { NewRecord, PatchRecord } from "@/lib/domain/repository";
 import { PLATFORMS } from "@/lib/domain/types";
-import type { AgentStatus, AppSettings, Customer, Employee, OfficeInfo, Platform, Property, WorkspaceSnapshot } from "@/lib/domain/types";
+import type { AgentStatus, AppSettings, Customer, Employee, OfficeInfo, Platform, PlatformConnection, Property, WorkspaceSnapshot } from "@/lib/domain/types";
 import {
   type AgentRow, type CustomerRow, type DisclosureRow, type DraftRow, type EmployeeRow, type JobRow, type MediaRow, type OfficeRow,
   type PropertyRow, type SettingsRow, type TargetRow,
@@ -92,6 +92,17 @@ export async function loadAgent(ctx: WorkspaceContext): Promise<AgentStatus> {
   return agentFromRow(row, nowOf(ctx));
 }
 
+export async function loadPlatformConnections(ctx: WorkspaceContext): Promise<PlatformConnection[]> {
+  const list = await rows<{ platform: Platform; status: PlatformConnection["status"]; last_checked_at: string | null }>(
+    "플랫폼 연결 상태 조회",
+    ctx.client.from("platform_connections").select("platform,status,last_checked_at").eq("office_id", ctx.officeId),
+  );
+  return PLATFORMS.map((platform) => {
+    const connection = list.find((item) => item.platform === platform);
+    return { platform, status: connection?.status ?? "not_configured", lastCheckedAt: connection?.last_checked_at ?? null };
+  });
+}
+
 export async function loadOffice(ctx: WorkspaceContext): Promise<OfficeInfo> {
   const row = await one<OfficeRow>("사업장 조회", ctx.client.from("offices").select("id,name,region_label").eq("id", ctx.officeId).maybeSingle());
   if (!row) throw new Error("사업장을 찾을 수 없습니다. BARJUNG_OFFICE_ID 값을 확인하세요.");
@@ -99,10 +110,10 @@ export async function loadOffice(ctx: WorkspaceContext): Promise<OfficeInfo> {
 }
 
 export async function loadWorkspace(ctx: WorkspaceContext, readOnly: boolean): Promise<WorkspaceSnapshot> {
-  const [office, agent, settings, properties, employees, customers] = await Promise.all([
-    loadOffice(ctx), loadAgent(ctx), loadSettings(ctx), loadProperties(ctx), loadEmployees(ctx), loadCustomers(ctx),
+  const [office, agent, connections, settings, properties, employees, customers] = await Promise.all([
+    loadOffice(ctx), loadAgent(ctx), loadPlatformConnections(ctx), loadSettings(ctx), loadProperties(ctx), loadEmployees(ctx), loadCustomers(ctx),
   ]);
-  return { mode: "live", readOnly, office, agent, settings, properties, employees, customers };
+  return { mode: "live", readOnly, office, agent, connections, settings, properties, employees, customers };
 }
 
 // ---------- 매물 ----------
@@ -231,6 +242,21 @@ export async function updateProperty(ctx: WorkspaceContext, id: string, patch: P
 }
 
 export async function deleteProperty(ctx: WorkspaceContext, id: string): Promise<void> {
+  const prefix = `${ctx.officeId}/${id}/`;
+  const [media, legacyJobs] = await Promise.all([
+    rows<{ storage_path: string }>("매물 사진 경로 조회", ctx.client.from("property_media").select("storage_path").eq("office_id", ctx.officeId).eq("property_id", id)),
+    rows<{ source_files: Array<{ path?: string }> | null }>("임시 사진 경로 조회", ctx.client.from("media_optimization_jobs").select("source_files").eq("office_id", ctx.officeId).eq("property_id", id)),
+  ]);
+  const finalPaths = media.map((item) => item.storage_path).filter((path) => path.startsWith(prefix) && !path.includes(".."));
+  const stagingPaths = legacyJobs.flatMap((job) => job.source_files ?? []).map((file) => file.path ?? "").filter((path) => path.startsWith(prefix) && !path.includes(".."));
+  if (finalPaths.length) {
+    const { error } = await ctx.client.storage.from("property-media").remove(finalPaths);
+    if (error) fail("매물 사진 파일 삭제", error);
+  }
+  if (stagingPaths.length) {
+    const { error } = await ctx.client.storage.from("property-media-staging").remove(stagingPaths);
+    if (error) fail("임시 사진 파일 삭제", error);
+  }
   const { error } = await ctx.client.from("properties").delete().eq("id", id).eq("office_id", ctx.officeId);
   if (error) fail("매물 삭제", error);
 }

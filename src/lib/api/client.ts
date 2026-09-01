@@ -1,5 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
-import { createDemoRepository, type BarjungRepository, type CrudRepository } from "@/lib/domain/repository";
+import { createDemoRepository, type BarjungRepository, type CrudRepository, type MediaUploadProgress } from "@/lib/domain/repository";
 import type { AppSettings, Customer, Employee, Platform, Property, WorkspaceSnapshot } from "@/lib/domain/types";
 import { customers as demoCustomers, employees as demoEmployees, properties as demoProperties } from "@/lib/mock/data";
 
@@ -10,38 +9,48 @@ async function call<T>(input: string, init?: RequestInit): Promise<T> {
   return payload;
 }
 
-interface PreparedUpload { name: string; type: string; size: number; path: string; token: string }
-interface PreparedMediaJob { jobId: string; bucket: string; uploads: PreparedUpload[] }
-interface MediaJobStatus {
-  status: "uploading" | "queued" | "running" | "succeeded" | "failed";
+interface LocalRunnerHealth { status: "online"; token: string }
+interface LocalMediaJob {
+  id: string;
+  status: "queued" | "running" | "succeeded" | "failed";
+  processed: number;
+  total: number;
   error?: string | null;
-  property?: Property | null;
 }
 
-function browserStorageClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim();
-  if (!url || !key) throw new Error("브라우저 사진 업로드용 Supabase 공개 키가 없습니다.");
-  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-}
+const LOCAL_RUNNER_URL = (process.env.NEXT_PUBLIC_BARJUNG_RUNNER_URL || "http://127.0.0.1:43127").replace(/\/$/, "");
 
-async function uploadMedia(propertyId: string, files: File[]): Promise<Property> {
-  const path = `/api/properties/${encodeURIComponent(propertyId)}/media`;
-  const prepared = await call<PreparedMediaJob>(path, {
-    method: "POST",
-    body: JSON.stringify({ action: "prepare", files: files.map((file) => ({ name: file.name, type: file.type, size: file.size })) }),
-  });
-  const storage = browserStorageClient().storage.from(prepared.bucket);
-  for (let index = 0; index < prepared.uploads.length; index += 1) {
-    const upload = prepared.uploads[index];
-    const { error } = await storage.uploadToSignedUrl(upload.path, upload.token, files[index], { contentType: upload.type });
-    if (error) throw new Error(`${upload.name} 원본 전달 실패: ${error.message}`);
+async function uploadMedia(propertyId: string, files: File[], onProgress?: (progress: MediaUploadProgress) => void): Promise<Property> {
+  let health: LocalRunnerHealth;
+  try {
+    const response = await fetch(`${LOCAL_RUNNER_URL}/health`, { cache: "no-store" });
+    health = await response.json() as LocalRunnerHealth;
+    if (!response.ok || health.status !== "online" || !health.token) throw new Error("invalid health response");
+  } catch {
+    throw new Error("Windows 사진 실행기가 오프라인입니다. 바를정 실행기를 시작한 뒤 다시 저장하세요.");
   }
-  await call(path, { method: "POST", body: JSON.stringify({ action: "queue", jobId: prepared.jobId }) });
+
+  const form = new FormData();
+  for (const file of files) form.append("photos", file, file.name);
+  onProgress?.({ phase: "transferring", processed: 0, total: files.length });
+  const queuedResponse = await fetch(`${LOCAL_RUNNER_URL}/media/jobs`, {
+    method: "POST",
+    headers: { "X-Barjung-Runner-Token": health.token, "X-Barjung-Property-Id": propertyId },
+    body: form,
+  });
+  const queued = await queuedResponse.json().catch(() => ({})) as LocalMediaJob & { error?: string };
+  if (!queuedResponse.ok || !queued.id) throw new Error(queued.error || "사진을 Windows 실행기로 전달하지 못했습니다.");
+  onProgress?.({ phase: "optimizing", processed: 0, total: queued.total || files.length });
 
   for (let attempt = 0; attempt < 600; attempt += 1) {
-    const result = await call<MediaJobStatus>(`${path}?jobId=${encodeURIComponent(prepared.jobId)}`);
-    if (result.status === "succeeded" && result.property) return result.property;
+    const response = await fetch(`${LOCAL_RUNNER_URL}/media/jobs/${encodeURIComponent(queued.id)}`, {
+      headers: { "X-Barjung-Runner-Token": health.token },
+      cache: "no-store",
+    });
+    const result = await response.json().catch(() => ({})) as LocalMediaJob & { error?: string };
+    if (!response.ok) throw new Error(result.error || "사진 최적화 상태를 확인하지 못했습니다.");
+    onProgress?.({ phase: result.status === "succeeded" ? "complete" : "optimizing", processed: result.processed, total: result.total });
+    if (result.status === "succeeded") return call<Property>(`/api/properties/${encodeURIComponent(propertyId)}`);
     if (result.status === "failed") throw new Error(result.error || "Windows 사진 최적화에 실패했습니다.");
     await new Promise((resolve) => window.setTimeout(resolve, 1000));
   }
