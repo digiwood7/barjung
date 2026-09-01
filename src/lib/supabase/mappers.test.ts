@@ -29,9 +29,9 @@ describe("mappers", () => {
     expect(areaLabel("대구광역시 북구 산격동 481-5")).toBe("산격동");
   });
 
-  it("배포 대상이 없으면 4개 플랫폼 모두 not_requested", () => {
+  it("배포 대상이 없으면 5개 운영 플랫폼 모두 not_requested", () => {
     const targets = targetsFromRows([]);
-    expect(targets.map((t) => t.platform)).toEqual(["naver", "instagram", "daangn", "zigbang"]);
+    expect(targets.map((t) => t.platform)).toEqual(["naver", "daangn", "instagram", "tiktok", "youtube"]);
     expect(targets.every((t) => t.status === "not_requested")).toBe(true);
   });
 

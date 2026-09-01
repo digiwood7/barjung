@@ -10,6 +10,7 @@ export const LIVE_POLL_MS = 5000;
 export interface WorkspaceActions {
   createProperty(input: NewRecord<Property>): Promise<Property>;
   uploadPropertyMedia(propertyId: string, files: File[], onProgress?: (progress: MediaUploadProgress) => void): Promise<Property>;
+  uploadPropertyVideo(propertyId: string, file: File): Promise<Property>;
   updateProperty(id: string, patch: PatchRecord<Property>): Promise<Property>;
   removeProperty(id: string): Promise<void>;
   replaceProperty(property: Property): void;
@@ -71,6 +72,7 @@ export function useWorkspace(provided?: BarjungRepository): WorkspaceState {
     return {
       async createProperty(input) { const created = await need().properties.create(input); patch((s) => ({ ...s, properties: [created, ...s.properties] })); return created; },
       async uploadPropertyMedia(propertyId, files, onProgress) { const updated = await need().uploadPropertyMedia(propertyId, files, onProgress); patch((s) => ({ ...s, properties: s.properties.map((p) => (p.id === propertyId ? updated : p)) })); return updated; },
+      async uploadPropertyVideo(propertyId, file) { const updated = await need().uploadPropertyVideo(propertyId, file); patch((s) => ({ ...s, properties: s.properties.map((p) => (p.id === propertyId ? updated : p)) })); return updated; },
       async updateProperty(id, input) { const updated = await need().properties.update(id, input); patch((s) => ({ ...s, properties: s.properties.map((p) => (p.id === id ? updated : p)) })); return updated; },
       async removeProperty(id) { await need().properties.remove(id); patch((s) => ({ ...s, properties: s.properties.filter((p) => p.id !== id) })); },
       replaceProperty(property) { patch((s) => ({ ...s, properties: s.properties.map((p) => (p.id === property.id ? property : p)) })); },

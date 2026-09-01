@@ -1,5 +1,7 @@
-export type Platform = "naver" | "instagram" | "daangn" | "zigbang";
-export const PLATFORMS: readonly Platform[] = ["naver", "instagram", "daangn", "zigbang"];
+export type Platform = "naver" | "daangn" | "instagram" | "tiktok" | "youtube";
+export const PHOTO_PLATFORMS: readonly Platform[] = ["naver", "daangn"];
+export const VIDEO_PLATFORMS: readonly Platform[] = ["instagram", "tiktok", "youtube"];
+export const PLATFORMS: readonly Platform[] = [...PHOTO_PLATFORMS, ...VIDEO_PLATFORMS];
 
 export type PublishStatus =
   | "not_requested"
@@ -76,6 +78,9 @@ export interface Property {
   createdAt: string;
   updatedAt?: string;
   photos: number;
+  /** 인스타·틱톡·유튜브 쇼츠에 공통으로 사용하는 세로 영상 1개 */
+  hasVideo: boolean;
+  videoName?: string;
   accent: string;
   employeeCopy?: string;
   copies?: Partial<Record<Platform, string>>;
@@ -165,5 +170,5 @@ export const defaultSettings: AppSettings = {
   imageQuality: 82,
   imageTargetKb: 800,
   inquiryTypes: [...DEFAULT_INQUIRY_TYPES],
-  publicAddressPolicy: { naver: "district", instagram: "district", daangn: "district", zigbang: "lot" },
+  publicAddressPolicy: { naver: "district", daangn: "district", instagram: "district", tiktok: "district", youtube: "district" },
 };

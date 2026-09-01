@@ -1,9 +1,16 @@
-import { daangnAdapter } from "./daangn.js";
-import { instagramAdapter } from "./instagram.js";
+import { createDaangnAdapter } from "./daangn.js";
+import { createInstagramAdapter } from "./instagram.js";
 import { createNaverAdapter } from "./naver.js";
-import { zigbangAdapter } from "./zigbang.js";
+import { tiktokAdapter } from "./tiktok.js";
+import { youtubeAdapter } from "./youtube.js";
 import type { AdapterMap } from "../types.js";
 
 export function createPlatformAdapters(env: NodeJS.ProcessEnv = process.env): Required<AdapterMap> {
-  return { naver: createNaverAdapter(env), instagram: instagramAdapter, daangn: daangnAdapter, zigbang: zigbangAdapter };
+  return {
+    naver: createNaverAdapter(env),
+    daangn: createDaangnAdapter(env),
+    instagram: createInstagramAdapter(env),
+    tiktok: tiktokAdapter,
+    youtube: youtubeAdapter,
+  };
 }

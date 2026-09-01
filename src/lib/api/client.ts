@@ -57,6 +57,46 @@ async function uploadMedia(propertyId: string, files: File[], onProgress?: (prog
   throw new Error("Windows 실행기의 사진 최적화 응답 시간이 초과되었습니다.");
 }
 
+interface PreparedVideoUpload { path: string; signedUrl: string }
+
+async function inspectVerticalVideo(file: File): Promise<{ width: number; height: number; durationSeconds: number }> {
+  const url = URL.createObjectURL(file);
+  try {
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.src = url;
+    await new Promise<void>((resolve, reject) => {
+      const timer = window.setTimeout(() => reject(new Error("영상 정보를 읽는 시간이 초과되었습니다.")), 15_000);
+      video.onloadedmetadata = () => { window.clearTimeout(timer); resolve(); };
+      video.onerror = () => { window.clearTimeout(timer); reject(new Error("선택한 영상 파일을 읽을 수 없습니다.")); };
+    });
+    const width = video.videoWidth;
+    const height = video.videoHeight;
+    if (!width || !height || !Number.isFinite(video.duration)) throw new Error("영상 크기와 재생 시간을 확인할 수 없습니다.");
+    if (height <= width) throw new Error("인스타·틱톡·유튜브 쇼츠용 세로 영상만 올릴 수 있습니다. (높이가 너비보다 커야 합니다.)");
+    return { width, height, durationSeconds: video.duration };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function uploadVideo(propertyId: string, file: File): Promise<Property> {
+  const metadata = await inspectVerticalVideo(file);
+  const prepared = await call<PreparedVideoUpload>(`/api/properties/${encodeURIComponent(propertyId)}/video`, {
+    method: "POST",
+    body: JSON.stringify({ action: "prepare", file: { name: file.name, type: file.type, size: file.size, ...metadata } }),
+  });
+  const body = new FormData();
+  body.append("cacheControl", "3600");
+  body.append("", file, file.name);
+  const upload = await fetch(prepared.signedUrl, { method: "PUT", body });
+  if (!upload.ok) throw new Error("영상을 Supabase 저장소에 업로드하지 못했습니다.");
+  return call<Property>(`/api/properties/${encodeURIComponent(propertyId)}/video`, {
+    method: "POST",
+    body: JSON.stringify({ action: "commit", path: prepared.path, file: { name: file.name, type: file.type, size: file.size, ...metadata } }),
+  });
+}
+
 function crud<T extends { id: string }>(base: string): CrudRepository<T> {
   return {
     list: () => call<T[]>(base),
@@ -82,6 +122,7 @@ export function createApiRepository(initial?: WorkspaceSnapshot): BarjungReposit
       catch { return null; }
     },
     uploadPropertyMedia: uploadMedia,
+    uploadPropertyVideo: uploadVideo,
     requestDistribution: (propertyId, platforms?: Platform[]) => call<Property>("/api/distribution", { method: "POST", body: JSON.stringify({ propertyId, platforms }) }),
     updateSettings: (patch: Partial<AppSettings>) => call<AppSettings>("/api/settings", { method: "PATCH", body: JSON.stringify(patch) }),
   };

@@ -45,7 +45,7 @@ describe("workspace 데이터 서비스 (가짜 Supabase)", () => {
     const seed = demoProperties[0];
     const created = await createProperty(ctx, {
       ...seed, number: "", registeredBy: "김민지", registeredById: undefined,
-      copies: { naver: "네이버 원고", instagram: "인스타 원고", daangn: "당근 원고", zigbang: "직방 원고" },
+      copies: { naver: "네이버 원고", daangn: "당근 원고", instagram: "인스타 원고", tiktok: "틱톡 원고", youtube: "쇼츠 원고" },
     });
     expect(created.number).toBe("260830-01");
     expect(created.registeredBy).toBe("김민지");
@@ -53,7 +53,7 @@ describe("workspace 데이터 서비스 (가짜 Supabase)", () => {
     expect(db.rows("properties")[0].deposit_won).toBe(5_000_000);
     expect(created.disclosure.direction).toBe("남동향 (주실 창 기준)");
     expect(db.rows("legal_disclosures")[0].validation_status).toBe("valid");
-    expect(db.rows("content_drafts")).toHaveLength(4);
+    expect(db.rows("content_drafts")).toHaveLength(5);
     expect(db.rows("content_drafts")[0].legal_block).toContain("공인중개사법 시행령에 따른 명시사항");
     expect(created.targets.every((t) => t.status === "not_requested")).toBe(true);
     expect(created.createdAt).toMatch(/^오늘/);
@@ -77,12 +77,14 @@ describe("workspace 데이터 서비스 (가짜 Supabase)", () => {
     await expect(requestDistribution(ctx, created.id)).rejects.toThrow(/법정 고지 필수값 누락/);
   });
 
-  it("전체 발행 요청에서 네이버부터 네 플랫폼을 한 작업에 순서대로 큐잉한다", async () => {
-    const created = await createProperty(ctx, { ...demoProperties[0], number: "", copies: { naver: "n", instagram: "i", daangn: "d", zigbang: "z" } });
+  it("전체 발행 요청에서 사진 채널 뒤 영상 채널을 한 작업에 순서대로 큐잉한다", async () => {
+    const created = await createProperty(ctx, { ...demoProperties[0], number: "", copies: { naver: "n", daangn: "d", instagram: "i", tiktok: "t", youtube: "y" } });
+    db.seed("property_media", [{ office_id: OFFICE, property_id: created.id, storage_path: `${OFFICE}/${created.id}/01.jpg`, sort_order: 0 }]);
+    db.seed("property_videos", [{ office_id: OFFICE, property_id: created.id, storage_path: `${OFFICE}/${created.id}/vertical.mp4`, original_filename: "vertical.mp4" }]);
     const queued = await requestDistribution(ctx, created.id);
-    expect(queued.targets.map((t) => t.status)).toEqual(["queued", "queued", "queued", "queued"]);
+    expect(queued.targets.map((t) => t.status)).toEqual(["queued", "queued", "queued", "queued", "queued"]);
     expect(db.rows("distribution_jobs")).toHaveLength(1);
-    expect(db.rows("distribution_targets").map((t) => t.platform)).toEqual(["naver", "instagram", "daangn", "zigbang"]);
+    expect(db.rows("distribution_targets").map((t) => t.platform)).toEqual(["naver", "daangn", "instagram", "tiktok", "youtube"]);
     expect(db.rows("distribution_targets").every((t) => t.content_draft_id)).toBe(true);
     await expect(requestDistribution(ctx, created.id)).rejects.toThrow(/방금 요청/);
     const naverDrafts = db.rows("content_drafts").filter((draft) => draft.platform === "naver");
@@ -92,10 +94,11 @@ describe("workspace 데이터 서비스 (가짜 Supabase)", () => {
   });
 
   it("선택한 플랫폼만 순서를 유지해 배포 대상으로 만든다", async () => {
-    const created = await createProperty(ctx, { ...demoProperties[0], number: "", copies: { naver: "n", instagram: "i", daangn: "d", zigbang: "z" } });
-    const queued = await requestDistribution(ctx, created.id, ["instagram", "zigbang"]);
-    expect(queued.targets.map((target) => target.status)).toEqual(["not_requested", "queued", "not_requested", "queued"]);
-    expect(db.rows("distribution_targets").map((target) => target.platform)).toEqual(["instagram", "zigbang"]);
+    const created = await createProperty(ctx, { ...demoProperties[0], number: "", copies: { naver: "n", daangn: "d", instagram: "i", tiktok: "t", youtube: "y" } });
+    db.seed("property_videos", [{ office_id: OFFICE, property_id: created.id, storage_path: `${OFFICE}/${created.id}/vertical.mp4`, original_filename: "vertical.mp4" }]);
+    const queued = await requestDistribution(ctx, created.id, ["instagram", "youtube"]);
+    expect(queued.targets.map((target) => target.status)).toEqual(["not_requested", "not_requested", "queued", "not_requested", "queued"]);
+    expect(db.rows("distribution_targets").map((target) => target.platform)).toEqual(["instagram", "youtube"]);
   });
 
   it("매물 수정은 상태·금액·고지·원고 버전을 갱신하고 삭제는 하위 행까지 지운다", async () => {
@@ -133,6 +136,6 @@ describe("workspace 데이터 서비스 (가짜 Supabase)", () => {
 
     const settings = await updateSettings(ctx, { publishMode: "automatic", publicAddressPolicy: { naver: "hidden" } as never });
     expect(settings.publishMode).toBe("automatic");
-    expect(settings.publicAddressPolicy).toMatchObject({ naver: "hidden", zigbang: "lot" });
+    expect(settings.publicAddressPolicy).toMatchObject({ naver: "hidden", youtube: "district" });
   });
 });

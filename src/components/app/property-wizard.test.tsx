@@ -151,7 +151,7 @@ describe("PropertyWizard 사진 최적화 단계", () => {
     render(<PropertyWizard mode="live" employees={[]} property={{ ...properties[0], photos: 3 }} onClose={() => undefined} onSave={onSave} onPublish={onPublish} />);
 
     expect(screen.getByRole("heading", { name: "매물 등록·수정" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /사진 최적화/ }));
+    fireEvent.click(screen.getByRole("button", { name: /사진·영상/ }));
     expect(screen.getByText("저장된 최적화 사진 3장")).toBeInTheDocument();
     const files = [new File(["one"], "new-01.jpg", { type: "image/jpeg" }), new File(["two"], "new-02.jpg", { type: "image/jpeg" })];
     fireEvent.change(screen.getByLabelText("매물 사진 선택"), { target: { files } });
@@ -160,8 +160,8 @@ describe("PropertyWizard 사진 최적화 단계", () => {
     fireEvent.click(screen.getByRole("button", { name: /등록 확인/ }));
     expect(screen.getByRole("button", { name: "플랫폼 발행" })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: /변경사항 저장/ }));
-    await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.any(Object), files, properties[0].id, expect.any(Function)));
-    expect(screen.getByText("매물과 최적화 사진 2장을 저장했습니다.")).toBeInTheDocument();
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.any(Object), files, null, properties[0].id, expect.any(Function)));
+    expect(screen.getByText(/매물과 사진 2장·세로 영상 1개를 저장했습니다/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "플랫폼 발행" }));
     expect(onPublish).toHaveBeenCalledWith(properties[0].id);
   });

@@ -2,7 +2,7 @@
 
 import { Activity, Check, CheckCircle2, Clock3, ExternalLink, RefreshCcw, ShieldCheck, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { PLATFORMS } from "@/lib/domain/types";
+import { PHOTO_PLATFORMS, PLATFORMS, VIDEO_PLATFORMS } from "@/lib/domain/types";
 import type { AgentStatus, DistributionTarget, Platform, Property, PublishStatus, WorkspaceMode } from "@/lib/domain/types";
 import { PlatformLogo, platformName, terminalStatuses } from "./ui";
 
@@ -137,13 +137,14 @@ export function DistributionModal({ property, mode, agent, onClose, onUpdate, re
         <div className="wizard-head"><div><span className="eyebrow">PLATFORM PUBLISH</span><h2 id="distribution-selection-title">발행할 플랫폼을 선택하세요</h2><p>{property.number} · {property.area} {property.type}</p></div><button className="icon-button" aria-label="닫기" onClick={onClose}><X size={20} /></button></div>
         <div className="distribution-selection">
           <div className="platform-selection-head"><div><strong>플랫폼 선택</strong><small>기본값은 전체 선택이며 필요한 플랫폼만 남길 수 있습니다.</small></div><label><input type="checkbox" aria-label="전체 플랫폼 선택" checked={selectedPlatforms.length === PLATFORMS.length} onChange={(event) => setSelectedPlatforms(event.target.checked ? [...PLATFORMS] : [])} /> 전체 선택</label></div>
+          <div className="distribution-media-summary"><span><strong>사진</strong> {PHOTO_PLATFORMS.map((platform) => platformName[platform]).join(" · ")}</span><span><strong>세로 영상 1개</strong> {VIDEO_PLATFORMS.map((platform) => platformName[platform]).join(" · ")}</span></div>
           <div className="copy-grid">
             {PLATFORMS.map((platform) => <label key={platform} className={`copy-card platform-check ${selectedPlatforms.includes(platform) ? "selected" : "disabled"}`}><input type="checkbox" aria-label={`${platformName[platform]} 발행 선택`} checked={selectedPlatforms.includes(platform)} onChange={() => togglePlatform(platform)} /><PlatformLogo platform={platform} /><span><strong>{platformName[platform]}</strong><small>{selectedPlatforms.includes(platform) ? "이번 발행에 포함" : "이번 발행에서 제외"}</small></span></label>)}
           </div>
           {live && agent.status !== "online" && <div className="error-guide"><Activity size={17} /><span>실행기가 오프라인입니다. 발행 전 고객 PC 실행기 상태를 확인하세요.</span></div>}
           {error && <div className="error-guide"><Activity size={17} /><span>{error}</span></div>}
         </div>
-        <div className="distribution-foot"><span><ShieldCheck size={15} /> 저장된 매물과 사진을 선택한 플랫폼에만 발행합니다.</span><div><button type="button" className="secondary" onClick={onClose}>취소</button><button type="button" className="primary" onClick={startDistribution} disabled={starting || activePlatforms.length === 0}>{starting ? "발행 요청 중" : `선택 플랫폼 발행 시작 (${activePlatforms.length})`}</button></div></div>
+        <div className="distribution-foot"><span><ShieldCheck size={15} /> 사진과 세로 영상을 채널 용도에 맞게 분리해 발행합니다.</span><div><button type="button" className="secondary" onClick={onClose}>취소</button><button type="button" className="primary" onClick={startDistribution} disabled={starting || activePlatforms.length === 0}>{starting ? "발행 요청 중" : `선택 플랫폼 발행 시작 (${activePlatforms.length})`}</button></div></div>
       </div></div>
     );
   }
@@ -159,7 +160,7 @@ export function DistributionModal({ property, mode, agent, onClose, onUpdate, re
         {targets.map((target) => { const selected = activePlatforms.includes(target.platform); return (
           <div className={`distribution-row ${target.status}`} key={target.platform}>
             <PlatformLogo platform={target.platform} />
-            <div className="distribution-copy"><strong>{platformName[target.platform]}</strong><small>{!selected ? "이번 발행에서 선택하지 않음" : target.status === "queued" ? "앞 플랫폼 발행 완료 대기 중" : target.status === "running" ? "사진과 게시글을 업로드하는 중" : target.status === "succeeded" ? "발행 완료" : target.error ?? target.status}</small>{selected && <div className="mini-progress"><i className={target.status === "succeeded" ? "complete" : ""} style={{ width: `${target.progress}%` }} /></div>}</div>
+            <div className="distribution-copy"><strong>{platformName[target.platform]}</strong><small>{!selected ? "이번 발행에서 선택하지 않음" : target.status === "queued" ? "앞 플랫폼 발행 완료 대기 중" : target.status === "running" ? `${VIDEO_PLATFORMS.includes(target.platform) ? "세로 영상" : "사진"}과 게시글을 업로드하는 중` : target.status === "succeeded" ? "발행 완료" : target.error ?? target.status}</small>{selected && <div className="mini-progress"><i className={target.status === "succeeded" ? "complete" : ""} style={{ width: `${target.progress}%` }} /></div>}</div>
             {target.status === "succeeded" && target.url && <a href={target.url} target="_blank" rel="noreferrer"><ExternalLink size={14} /> 열기</a>}
             {selected && (target.status === "failed" || target.status === "not_configured") && <button className="retry-button" aria-label={`${platformName[target.platform]}만 재발행`} onClick={() => retry(target.platform)} disabled={retrying !== null}><RefreshCcw size={14} /> 이 플랫폼 재발행</button>}
             {target.status === "succeeded" && <CheckCircle2 className="distribution-done" size={19} />}

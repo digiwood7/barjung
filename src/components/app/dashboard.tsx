@@ -19,12 +19,12 @@ export function Dashboard({ properties, onView, onSelect, onNew }: { properties:
   return (
     <div className="view-stack">
       <section className="page-intro dashboard-intro">
-        <div><span className="eyebrow">TODAY&apos;S PROPERTY DESK</span><h1>매물의 시작부터<br /><em>게시 완료까지.</em></h1><p>경북대 인근 매물과 네 채널의 배포 상태를 한 자리에서 확인하세요.</p></div>
+        <div><span className="eyebrow">TODAY&apos;S PROPERTY DESK</span><h1>매물의 시작부터<br /><em>게시 완료까지.</em></h1><p>경북대 인근 매물과 사진·세로 영상 5개 채널의 배포 상태를 한 자리에서 확인하세요.</p></div>
         <div className="intro-actions"><button className="primary" onClick={onNew}><Plus size={17} /> 새 매물 등록</button></div>
       </section>
       <section className="metrics-row">
         <Metric label="전체 매물" value={String(properties.length)} sub="현재 등록 기준" />
-        <Metric label="광고 중" value={String(active)} sub="4개 채널 기준" tone="blue" />
+        <Metric label="광고 중" value={String(active)} sub="5개 채널 기준" tone="blue" />
         <Metric label="검토 대기" value={String(review)} sub="고지 확인 필요" tone="amber" />
         <Metric label="배포 실패" value={String(failed)} sub={failedNote} tone="red" />
       </section>

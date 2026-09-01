@@ -77,19 +77,20 @@ export function BarjungApp({ repository }: { repository?: BarjungRepository } = 
       </main>
 
       {selected && <PropertyDetail property={selected} office={office} mode={mode} onClose={() => setSelectedId(null)} onPublish={() => { setDistributionRequest({ id: selected.id }); setSelectedId(null); }} onEdit={() => { setFormError(""); setEditingPropertyId(selected.id); setSelectedId(null); setWizard(true); }} />}
-      {wizard && <PropertyWizard mode={mode} employees={employees} property={editingProperty ?? undefined} onClose={() => { setWizard(false); if (editingPropertyId) setSelectedId(editingPropertyId); setEditingPropertyId(null); }} onSave={async (input, photos, propertyId, onProgress) => {
+      {wizard && <PropertyWizard mode={mode} employees={employees} property={editingProperty ?? undefined} onClose={() => { setWizard(false); if (editingPropertyId) setSelectedId(editingPropertyId); setEditingPropertyId(null); }} onSave={async (input, photos, video, propertyId, onProgress) => {
         const creating = !propertyId;
         let saved = propertyId
           ? await actions.updateProperty(propertyId, { ...input, updatedAt: "방금 전" })
           : await actions.createProperty(input);
         try {
           if (mode === "live" && photos.length) saved = await actions.uploadPropertyMedia(saved.id, photos, onProgress);
+          if (mode === "live" && video) saved = await actions.uploadPropertyVideo(saved.id, video);
         } catch (error) {
           if (creating) await actions.removeProperty(saved.id).catch(() => undefined);
           throw error;
         }
         setEditingPropertyId(saved.id);
-        showToast(photos.length ? `매물 저장 완료 · 사진 ${saved.photos}장 최적화` : creating ? "매물 등록을 완료했습니다." : "매물 정보를 저장했습니다.");
+        showToast(photos.length || video ? `매물 저장 완료 · 사진 ${saved.photos}장 · 세로 영상 ${saved.hasVideo ? "1개" : "없음"}` : creating ? "매물 등록을 완료했습니다." : "매물 정보를 저장했습니다.");
         return saved;
       }} onDelete={async (propertyId) => {
         const target = properties.find((item) => item.id === propertyId);

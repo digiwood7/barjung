@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, ExternalLink, Home, ListFilter, MapPin, Plus, Search, ShieldCheck, X, Zap } from "lucide-react";
+import { ChevronRight, ExternalLink, Home, ListFilter, MapPin, Plus, Search, ShieldCheck, Video, X, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
 import { validateDisclosure } from "@/lib/domain/legal-disclosure";
 import type { OfficeInfo, Property, WorkspaceMode } from "@/lib/domain/types";
@@ -40,7 +40,7 @@ export function PropertiesView({ properties, mode, onSelect, onNew }: Properties
               {filtered.length === 0 && <tr><td colSpan={6} className="empty-cell">조건에 맞는 매물이 없습니다.</td></tr>}
               {filtered.map((p) => (
                 <tr key={p.id} onClick={() => onSelect(p)}>
-                  <td><div className="property-cell"><span className="property-thumb" style={{ background: p.accent }}><Home size={18} /><i>{p.photos}</i></span><div><small>{p.number} · {p.area}</small><strong>{p.title}</strong><em>{p.type} · {p.publicAddress}</em></div></div></td>
+                  <td><div className="property-cell"><span className="property-thumb" style={{ background: p.accent }}><Home size={18} /><i>{p.photos}</i></span><div><small>{p.number} · {p.area}</small><strong>{p.title}</strong><em>{p.type} · 사진 {p.photos}장 · 세로 영상 {p.hasVideo ? "1개" : "없음"}</em></div></div></td>
                   <td><strong>보증금 {money(p.deposit)}</strong><small>월 {p.rent} · 관리비 {p.maintenance}</small></td>
                   <td><Badge tone={propertyStatusTone(p.status)}>{p.status}</Badge></td>
                   <td><strong>{p.registeredBy}</strong><small>{p.createdAt}</small></td>
@@ -88,6 +88,7 @@ export function PropertyDetail({ property, office, mode, onClose, onPublish, onE
           {property.photos > 3 && <span className="photo-more">+{property.photos - 3}</span>}
         </div>
         <div className="detail-summary"><div><small>거래조건</small><strong>보증금 {money(property.deposit)} / 월 {property.rent}</strong></div><div><small>매물 상태</small><Badge tone={propertyStatusTone(property.status)}>{property.status}</Badge></div></div>
+        <section className="detail-section"><div className="section-title"><h3>채널별 미디어</h3><Badge tone={property.hasVideo ? "green" : "amber"}><Video size={12} /> 세로 영상 {property.hasVideo ? "1개" : "없음"}</Badge></div><small>사진 {property.photos}장 → 네이버·당근 · 세로 영상 1개 → 인스타·틱톡·유튜브 쇼츠</small></section>
         <section className="detail-section"><div className="section-title"><h3>주소 정보</h3><Badge tone="blue">내부 전용</Badge></div><p className="address-line"><MapPin size={16} /> {property.exactAddress}</p><small>외부 게시: {property.publicAddress} · 플랫폼별 공개 범위 적용</small></section>
         {mode === "live" && property.photos === 0 && (
           <section className="detail-section"><div className="section-title"><h3>사진 업로드</h3><Badge tone="amber">Windows PC</Badge></div><small>고객 PC PowerShell 에서 아래를 실행하면 원본은 두고 최적화 사진만 고객 Storage 에 올라갑니다.</small><pre className="code-block">{photoUploadCommand(office, property)}</pre></section>

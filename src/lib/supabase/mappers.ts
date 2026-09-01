@@ -24,6 +24,7 @@ export interface DisclosureRow {
   lot_number_notice: string; measurement_notice: string; validation_status: "pending" | "valid" | "invalid";
 }
 export interface MediaRow { property_id: string }
+export interface VideoRow { property_id: string; original_filename: string }
 export interface DraftRow { id: string; property_id: string; platform: Platform | null; employee_copy: string; legal_block: string; version: number }
 export interface JobRow { id: string; property_id: string; requested_at: string }
 export interface TargetRow { id: string; distribution_job_id: string; platform: Platform; status: PublishStatus; error_code: string | null; error_summary: string | null; retry_count: number; published_url: string | null }
@@ -185,6 +186,7 @@ export interface PropertySources {
   properties: PropertyRow[];
   disclosures: DisclosureRow[];
   media: MediaRow[];
+  videos: VideoRow[];
   drafts: DraftRow[];
   jobs: JobRow[];
   targets: TargetRow[];
@@ -206,6 +208,7 @@ export function assembleProperties(sources: PropertySources): Property[] {
   const employeeName = new Map(sources.employees.map((row) => [row.id, row.name]));
   const mediaCount = new Map<string, number>();
   for (const row of sources.media) mediaCount.set(row.property_id, (mediaCount.get(row.property_id) ?? 0) + 1);
+  const videos = new Map(sources.videos.map((row) => [row.property_id, row.original_filename]));
   return sources.properties.map((row) => {
     const disclosure = disclosureFromRow(sources.disclosures.find((item) => item.property_id === row.id));
     const drafts = latestDraftsByPlatform(sources.drafts, row.id);
@@ -228,6 +231,8 @@ export function assembleProperties(sources: PropertySources): Property[] {
       createdAt: formatRelativeDate(row.created_at, sources.now),
       updatedAt: formatRelativeDate(row.updated_at, sources.now),
       photos: mediaCount.get(row.id) ?? 0,
+      hasVideo: videos.has(row.id),
+      videoName: videos.get(row.id),
       accent: accentFor(row.id),
       employeeCopy: copies.naver ?? Object.values(copies)[0],
       copies,

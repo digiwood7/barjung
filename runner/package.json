@@ -9,7 +9,12 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "naver:login": "tsx src/naver-login.ts",
-    "naver:status": "tsx src/naver-status.ts"
+    "naver:status": "tsx src/naver-status.ts",
+    "instagram:login": "tsx src/instagram-login.ts",
+    "instagram:status": "tsx src/instagram-status.ts",
+    "daangn:login": "tsx src/daangn-login.ts",
+    "daangn:open": "tsx src/daangn-open.ts",
+    "daangn:status": "tsx src/daangn-status.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.112.4",

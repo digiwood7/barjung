@@ -3,7 +3,7 @@ create extension if not exists pgcrypto;
 create type public.employment_status as enum ('active', 'leave', 'inactive');
 create type public.property_kind as enum ('one_room', 'two_room', 'officetel');
 create type public.property_status as enum ('draft', 'reviewed', 'advertising', 'contracting', 'completed', 'paused', 'closed');
-create type public.platform_name as enum ('naver', 'instagram', 'daangn', 'zigbang');
+create type public.platform_name as enum ('naver', 'instagram', 'daangn', 'zigbang', 'tiktok', 'youtube');
 create type public.publish_status as enum ('not_requested', 'queued', 'running', 'succeeded', 'failed', 'cancelled', 'not_configured');
 create type public.publish_mode as enum ('review', 'automatic');
 create type public.address_policy as enum ('lot', 'district', 'hidden');
@@ -248,6 +248,7 @@ create trigger employees_updated_at before update on public.employees for each r
 create trigger customers_updated_at before update on public.customers for each row execute function public.set_updated_at();
 create trigger properties_updated_at before update on public.properties for each row execute function public.set_updated_at();
 create trigger legal_disclosures_updated_at before update on public.legal_disclosures for each row execute function public.set_updated_at();
+create trigger property_videos_updated_at before update on public.property_videos for each row execute function public.set_updated_at();
 create trigger local_agents_updated_at before update on public.local_agents for each row execute function public.set_updated_at();
 create trigger distribution_targets_updated_at before update on public.distribution_targets for each row execute function public.set_updated_at();
 create trigger platform_connections_updated_at before update on public.platform_connections for each row execute function public.set_updated_at();
@@ -302,7 +303,7 @@ declare table_name text;
 begin
   foreach table_name in array array[
     'offices','employees','customers','properties','property_status_history','building_register_snapshots',
-    'legal_disclosures','property_media','content_drafts','local_agents','distribution_jobs',
+    'legal_disclosures','property_media','property_videos','content_drafts','local_agents','distribution_jobs',
     'distribution_targets','distribution_events','platform_connections','app_settings'
   ] loop
     execute format('alter table public.%I enable row level security', table_name);
@@ -318,7 +319,7 @@ declare table_name text;
 begin
   foreach table_name in array array[
     'employees','customers','properties','property_status_history','building_register_snapshots','legal_disclosures',
-    'property_media','content_drafts','local_agents','distribution_jobs','distribution_targets','distribution_events',
+    'property_media','property_videos','content_drafts','local_agents','distribution_jobs','distribution_targets','distribution_events',
     'platform_connections','app_settings'
   ] loop
     execute format(
@@ -349,16 +350,45 @@ with check (bucket_id = 'property-media' and (storage.foldername(name))[1] = (se
 create policy property_media_delete on storage.objects for delete to authenticated
 using (bucket_id = 'property-media' and (storage.foldername(name))[1] = (select auth.jwt() -> 'app_metadata' ->> 'office_id'));
 
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('property-videos', 'property-videos', false, 524288000, array['video/mp4','video/quicktime','video/webm'])
+on conflict (id) do update set public = false, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+create policy property_videos_select on storage.objects for select to authenticated
+using (bucket_id = 'property-videos' and (storage.foldername(name))[1] = (select auth.jwt() -> 'app_metadata' ->> 'office_id'));
+create policy property_videos_insert on storage.objects for insert to authenticated
+with check (bucket_id = 'property-videos' and (storage.foldername(name))[1] = (select auth.jwt() -> 'app_metadata' ->> 'office_id'));
+create policy property_videos_update on storage.objects for update to authenticated
+using (bucket_id = 'property-videos' and (storage.foldername(name))[1] = (select auth.jwt() -> 'app_metadata' ->> 'office_id'))
+with check (bucket_id = 'property-videos' and (storage.foldername(name))[1] = (select auth.jwt() -> 'app_metadata' ->> 'office_id'));
+create policy property_videos_delete on storage.objects for delete to authenticated
+using (bucket_id = 'property-videos' and (storage.foldername(name))[1] = (select auth.jwt() -> 'app_metadata' ->> 'office_id'));
+
 create table public.runner_commands (
   id uuid primary key default gen_random_uuid(),
   office_id uuid not null references public.offices(id) on delete cascade,
-  command text not null check (command in ('naver_login')),
+  command text not null check (command in ('naver_login', 'instagram_login', 'daangn_login')),
   status text not null default 'queued' check (status in ('queued', 'running', 'succeeded', 'failed')),
   result_message text,
   lease_agent_id uuid references public.local_agents(id) on delete set null,
   lease_expires_at timestamptz,
   started_at timestamptz,
   completed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table public.property_videos (
+  id uuid primary key default gen_random_uuid(),
+  office_id uuid not null references public.offices(id) on delete cascade,
+  property_id uuid not null unique references public.properties(id) on delete cascade,
+  storage_path text not null unique,
+  original_filename text not null,
+  size_bytes bigint not null check (size_bytes > 0 and size_bytes <= 524288000),
+  mime_type text not null check (mime_type in ('video/mp4', 'video/quicktime', 'video/webm')),
+  width integer not null check (width > 0),
+  height integer not null check (height > width),
+  duration_seconds numeric(10,3) not null check (duration_seconds > 0),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

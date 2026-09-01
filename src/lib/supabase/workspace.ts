@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { formatDisclosureBlock, validateDisclosure } from "@/lib/domain/legal-disclosure";
 import type { NewRecord, PatchRecord } from "@/lib/domain/repository";
-import { PLATFORMS } from "@/lib/domain/types";
+import { PHOTO_PLATFORMS, PLATFORMS, VIDEO_PLATFORMS } from "@/lib/domain/types";
 import type { AgentStatus, AppSettings, Customer, Employee, OfficeInfo, Platform, PlatformConnection, Property, WorkspaceSnapshot } from "@/lib/domain/types";
 import {
   type AgentRow, type CustomerRow, type DisclosureRow, type DraftRow, type EmployeeRow, type JobRow, type MediaRow, type OfficeRow,
@@ -52,16 +52,17 @@ async function loadPropertyRows(ctx: WorkspaceContext, propertyId?: string): Pro
   const { client, officeId } = ctx;
   let propertyFilter = client.from("properties").select("*").eq("office_id", officeId);
   if (propertyId) propertyFilter = propertyFilter.eq("id", propertyId);
-  const [properties, disclosures, media, drafts, jobs, targets, employees] = await Promise.all([
+  const [properties, disclosures, media, videos, drafts, jobs, targets, employees] = await Promise.all([
     rows<PropertyRow>("매물 조회", propertyFilter.order("created_at", { ascending: false })),
     rows<DisclosureRow>("법정 고지 조회", client.from("legal_disclosures").select("*").eq("office_id", officeId)),
     rows<MediaRow>("사진 조회", client.from("property_media").select("property_id").eq("office_id", officeId)),
+    rows<{ property_id: string; original_filename: string }>("영상 조회", client.from("property_videos").select("property_id,original_filename").eq("office_id", officeId)),
     rows<DraftRow>("원고 조회", client.from("content_drafts").select("id,property_id,platform,employee_copy,legal_block,version").eq("office_id", officeId)),
     rows<JobRow>("배포 작업 조회", client.from("distribution_jobs").select("id,property_id,requested_at").eq("office_id", officeId)),
     rows<TargetRow>("배포 대상 조회", client.from("distribution_targets").select("id,distribution_job_id,platform,status,error_code,error_summary,retry_count,published_url").eq("office_id", officeId)),
     rows<Pick<EmployeeRow, "id" | "name">>("직원 조회", client.from("employees").select("id,name").eq("office_id", officeId)),
   ]);
-  return assembleProperties({ properties, disclosures, media, drafts, jobs, targets, employees, now: nowOf(ctx) });
+  return assembleProperties({ properties, disclosures, media, videos, drafts, jobs, targets, employees, now: nowOf(ctx) });
 }
 
 export async function loadProperties(ctx: WorkspaceContext): Promise<Property[]> {
@@ -147,8 +148,9 @@ function automaticCopy(property: Pick<Property, "title" | "type" | "area" | "pub
   const location = property.area || property.publicAddress;
   const terms = `보증금 ${property.deposit}만원 / 월세 ${property.rent}만원 / 관리비 ${property.maintenance}만원`;
   if (platform === "instagram") return `${property.title}\n${location} ${property.type} · ${terms}`;
+  if (platform === "tiktok") return `${location} ${property.type} 영상 투어\n${property.title}\n${terms}`;
+  if (platform === "youtube") return `${property.title} | ${location} ${property.type} 쇼츠\n${terms}`;
   if (platform === "daangn") return `${location} ${property.type} 매물입니다.\n${property.title}\n${terms}`;
-  if (platform === "zigbang") return `${location} / ${property.type} / ${terms}\n${property.title}`;
   return `${property.title}\n\n${location}에 위치한 ${property.type} 매물입니다.\n${terms}`;
 }
 
@@ -243,8 +245,9 @@ export async function updateProperty(ctx: WorkspaceContext, id: string, patch: P
 
 export async function deleteProperty(ctx: WorkspaceContext, id: string): Promise<void> {
   const prefix = `${ctx.officeId}/${id}/`;
-  const [media, legacyJobs] = await Promise.all([
+  const [media, videos, legacyJobs] = await Promise.all([
     rows<{ storage_path: string }>("매물 사진 경로 조회", ctx.client.from("property_media").select("storage_path").eq("office_id", ctx.officeId).eq("property_id", id)),
+    rows<{ storage_path: string }>("매물 영상 경로 조회", ctx.client.from("property_videos").select("storage_path").eq("office_id", ctx.officeId).eq("property_id", id)),
     rows<{ source_files: Array<{ path?: string }> | null }>("임시 사진 경로 조회", ctx.client.from("media_optimization_jobs").select("source_files").eq("office_id", ctx.officeId).eq("property_id", id)),
   ]);
   const finalPaths = media.map((item) => item.storage_path).filter((path) => path.startsWith(prefix) && !path.includes(".."));
@@ -256,6 +259,11 @@ export async function deleteProperty(ctx: WorkspaceContext, id: string): Promise
   if (stagingPaths.length) {
     const { error } = await ctx.client.storage.from("property-media-staging").remove(stagingPaths);
     if (error) fail("임시 사진 파일 삭제", error);
+  }
+  const videoPaths = videos.map((item) => item.storage_path).filter((path) => path.startsWith(prefix) && !path.includes(".."));
+  if (videoPaths.length) {
+    const { error } = await ctx.client.storage.from("property-videos").remove(videoPaths);
+    if (error) fail("매물 영상 파일 삭제", error);
   }
   const { error } = await ctx.client.from("properties").delete().eq("id", id).eq("office_id", ctx.officeId);
   if (error) fail("매물 삭제", error);
@@ -272,6 +280,8 @@ export async function requestDistribution(ctx: WorkspaceContext, propertyId: str
     ? PLATFORMS.filter((platform) => platforms.includes(platform))
     : [...PLATFORMS];
   if (!selected.length) throw new Error("배포할 플랫폼을 선택하세요.");
+  if (selected.some((platform) => PHOTO_PLATFORMS.includes(platform)) && property.photos === 0) throw new Error("네이버·당근 발행용 사진을 한 장 이상 저장하세요.");
+  if (selected.some((platform) => VIDEO_PLATFORMS.includes(platform)) && !property.hasVideo) throw new Error("인스타·틱톡·유튜브 쇼츠 발행용 세로 영상을 저장하세요.");
 
   const texts = automaticDraftTexts(property);
   await insertDrafts(ctx, propertyId, texts, block, property.registeredById ?? null);

@@ -1142,7 +1142,7 @@ export type Database = {
     Enums: {
       address_policy: "lot" | "district" | "hidden"
       employment_status: "active" | "leave" | "inactive"
-      platform_name: "naver" | "instagram" | "daangn" | "zigbang"
+      platform_name: "naver" | "instagram" | "daangn" | "zigbang" | "tiktok" | "youtube"
       property_kind: "one_room" | "two_room" | "officetel"
       property_status:
         | "draft"
@@ -1293,7 +1293,7 @@ export const Constants = {
     Enums: {
       address_policy: ["lot", "district", "hidden"],
       employment_status: ["active", "leave", "inactive"],
-      platform_name: ["naver", "instagram", "daangn", "zigbang"],
+      platform_name: ["naver", "instagram", "daangn", "zigbang", "tiktok", "youtube"],
       property_kind: ["one_room", "two_room", "officetel"],
       property_status: [
         "draft",

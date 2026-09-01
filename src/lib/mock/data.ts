@@ -1,7 +1,8 @@
+import { PLATFORMS } from "@/lib/domain/types";
 import type { Customer, DistributionTarget, Employee, Platform, Property } from "./types";
 
 const completeTargets = (failed?: Platform): DistributionTarget[] =>
-  (["naver", "instagram", "daangn", "zigbang"] as Platform[]).map((platform) => ({
+  PLATFORMS.map((platform) => ({
     platform,
     status: failed === platform ? "failed" : "succeeded",
     progress: failed === platform ? 64 : 100,
@@ -29,29 +30,29 @@ export const properties: Property[] = [
   {
     id: "p1", number: "260829-01", title: "북문 3분, 채광 좋은 분리형 원룸", type: "원룸", status: "광고 중",
     area: "산격동", exactAddress: "대구광역시 북구 산격동 481-5", publicAddress: "대구광역시 북구 산격동",
-    deposit: 500, rent: 42, maintenance: 7, registeredBy: "정다혜", createdAt: "오늘 10:24", photos: 12,
-    accent: "linear-gradient(135deg,#7c9bb3,#e5d9c5)", disclosure, targets: completeTargets("zigbang"),
+    deposit: 500, rent: 42, maintenance: 7, registeredBy: "정다혜", createdAt: "오늘 10:24", photos: 12, hasVideo: true, videoName: "room-tour.mp4",
+    accent: "linear-gradient(135deg,#7c9bb3,#e5d9c5)", disclosure, targets: completeTargets("youtube"),
   },
   {
     id: "p2", number: "260828-03", title: "정문 생활권, 올수리 투룸", type: "투룸", status: "검토 완료",
     area: "대현동", exactAddress: "대구광역시 북구 대현동 119-2", publicAddress: "대구광역시 북구 대현동",
-    deposit: 1000, rent: 58, maintenance: 8, registeredBy: "김민지", createdAt: "어제 16:40", photos: 9,
+    deposit: 1000, rent: 58, maintenance: 8, registeredBy: "김민지", createdAt: "어제 16:40", photos: 9, hasVideo: false,
     accent: "linear-gradient(135deg,#b7896b,#f2dfbf)", disclosure: { ...disclosure, location: "대구광역시 북구 대현동", contractArea: "41.18㎡", rooms: "방 2, 욕실 1" },
-    targets: (["naver", "instagram", "daangn", "zigbang"] as Platform[]).map((platform) => ({ platform, status: "not_requested", progress: 0 })),
+    targets: PLATFORMS.map((platform) => ({ platform, status: "not_requested", progress: 0 })),
   },
   {
     id: "p3", number: "260827-02", title: "테크노문 신축급 풀옵션 오피스텔", type: "오피스텔", status: "계약 진행",
     area: "복현동", exactAddress: "대구광역시 북구 복현동 573-1", publicAddress: "대구광역시 북구 복현동",
-    deposit: 300, rent: 47, maintenance: 10, registeredBy: "정다혜", createdAt: "8월 27일", photos: 15,
+    deposit: 300, rent: 47, maintenance: 10, registeredBy: "정다혜", createdAt: "8월 27일", photos: 15, hasVideo: true,
     accent: "linear-gradient(135deg,#5b6f65,#d7d9cd)", disclosure: { ...disclosure, location: "대구광역시 북구 복현동", propertyCategory: "업무시설(오피스텔)" },
     targets: completeTargets(),
   },
   {
     id: "p4", number: "260826-04", title: "북문 앞 합리적인 반전세 원룸", type: "원룸", status: "등록 대기",
     area: "산격동", exactAddress: "대구광역시 북구 산격동 1327-3", publicAddress: "대구광역시 북구 산격동",
-    deposit: 2000, rent: 25, maintenance: 5, registeredBy: "김민지", createdAt: "8월 26일", photos: 8,
+    deposit: 2000, rent: 25, maintenance: 5, registeredBy: "김민지", createdAt: "8월 26일", photos: 8, hasVideo: false,
     accent: "linear-gradient(135deg,#89918f,#d9c9bd)", disclosure: { ...disclosure, contractArea: "", direction: "" },
-    targets: (["naver", "instagram", "daangn", "zigbang"] as Platform[]).map((platform) => ({ platform, status: "not_requested", progress: 0 })),
+    targets: PLATFORMS.map((platform) => ({ platform, status: "not_requested", progress: 0 })),
   },
 ];
 

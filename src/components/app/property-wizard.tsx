@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, ArrowRight, Building2, Check, CircleAlert, Database, FileCheck2, ImageIcon, MapPin, MessageSquareText, Search, Sparkles, Upload, X } from "lucide-react";
+import { Activity, ArrowRight, Building2, Check, CircleAlert, Database, FileCheck2, ImageIcon, MapPin, MessageSquareText, Search, Sparkles, Upload, Video, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { BuildingRegisterLookupResult } from "@/lib/building-register/types";
 import type { ParcelAddressInput } from "@/lib/building-register/types";
@@ -12,12 +12,12 @@ import { accentFor, areaLabel } from "@/lib/supabase/mappers";
 import { Badge, automaticDisclosureKeys, disclosureLabel } from "./ui";
 import { AddressSearch, type SelectedAddress } from "./address-search";
 
-const steps = ["기본정보", "사진 최적화", "건축물대장", "고지사항 입력", "등록 확인"];
+const steps = ["기본정보", "사진·영상", "건축물대장", "고지사항 입력", "등록 확인"];
 
 const demoDisclosure: LegalDisclosure = { location: "대구광역시 북구 산격동 481-5", contractArea: "79.62㎡", propertyCategory: "다가구주택", transactionType: "월세", floor: "4층 중 2층", availableFrom: "즉시 입주", rooms: "방 1, 욕실 1", approvalDate: "2020. 11. 06.", parking: "총 6대", maintenance: "월 7만원 (수도·인터넷 포함)", direction: "", lotNumberNotice: "중개의뢰인 요청으로 상세 지번 비공개", measurementNotice: "면적은 공부상 면적이며 현장 실측과 차이가 있을 수 있습니다." };
 const liveDisclosure: LegalDisclosure = { location: "", contractArea: "", propertyCategory: "", transactionType: "월세", floor: "", availableFrom: "", rooms: "", approvalDate: "", parking: "", maintenance: "", direction: "", lotNumberNotice: "중개의뢰인 요청으로 상세 지번 비공개", measurementNotice: "면적은 공부상 면적이며 현장 실측과 차이가 있을 수 있습니다." };
-const demoCopies: Record<Platform, string> = { naver: "경북대 북문 도보 3분, 채광 좋은 분리형 원룸입니다. 보증금 500만원 / 월 42만원, 관리비 7만원입니다.", instagram: "북문 3분 분리형 원룸. 채광 좋고 생활권이 편리합니다. 500/42, 관리비 7.", daangn: "산격동 북문 가까운 깔끔한 원룸입니다. 직접 촬영한 사진이며 즉시 입주 가능합니다.", zigbang: "경북대 북문 인근 / 분리형 원룸 / 풀옵션 / 즉시입주" };
-const emptyCopies: Record<Platform, string> = { naver: "", instagram: "", daangn: "", zigbang: "" };
+const demoCopies: Record<Platform, string> = { naver: "경북대 북문 도보 3분, 채광 좋은 분리형 원룸입니다. 보증금 500만원 / 월 42만원, 관리비 7만원입니다.", daangn: "산격동 북문 가까운 깔끔한 원룸입니다. 직접 촬영한 사진이며 즉시 입주 가능합니다.", instagram: "북문 3분 분리형 원룸. 채광 좋고 생활권이 편리합니다. 500/42, 관리비 7.", tiktok: "북문 3분 원룸을 영상으로 소개합니다. 500/42, 관리비 7.", youtube: "경북대 북문 도보 3분 분리형 원룸 쇼츠입니다." };
+const emptyCopies: Record<Platform, string> = { naver: "", daangn: "", instagram: "", tiktok: "", youtube: "" };
 const PROPERTY_DRAFT_KEY = "barjung:property-wizard-draft:v1";
 type RegistryStatus = "idle" | "loading" | "live" | "demo" | "failed";
 
@@ -68,7 +68,7 @@ interface PropertyWizardProps {
   employees: Employee[];
   property?: Property;
   onClose: () => void;
-  onSave: (input: NewRecord<Property>, photos: File[], propertyId?: string, onProgress?: (progress: MediaUploadProgress) => void) => Promise<Property>;
+  onSave: (input: NewRecord<Property>, photos: File[], video: File | null, propertyId?: string, onProgress?: (progress: MediaUploadProgress) => void) => Promise<Property>;
   onDelete?: (propertyId: string) => Promise<void>;
   onPublish: (propertyId: string) => void;
 }
@@ -114,6 +114,8 @@ export function PropertyWizard({ mode, employees, property, onClose, onSave, onD
   const [persistedProperty, setPersistedProperty] = useState<Property | null>(property ?? null);
   const [existingPhotoCount, setExistingPhotoCount] = useState(property?.photos ?? 0);
   const [photos, setPhotos] = useState<File[]>([]);
+  const [video, setVideo] = useState<File | null>(null);
+  const [existingVideo, setExistingVideo] = useState(property?.hasVideo ?? false);
   const [photoRestoreNotice, setPhotoRestoreNotice] = useState(false);
   const [mediaProgress, setMediaProgress] = useState<MediaUploadProgress | null>(null);
 
@@ -250,16 +252,18 @@ export function PropertyWizard({ mode, employees, property, onClose, onSave, onD
       exactAddress: [address.trim(), detailAddress.trim()].filter(Boolean).join(" "), publicAddress: disclosure.location || address.trim(),
       deposit: Number(deposit) || 0, rent: Number(rent) || 0, maintenance: Number(maintenance) || 0,
       registeredBy: employee?.name ?? property?.registeredBy ?? "미지정", registeredById: employee?.id ?? property?.registeredById ?? null, createdAt: property?.createdAt ?? "방금 전",
-      photos: property?.photos ?? (demo ? 10 : 0), accent: property?.accent ?? accentFor(`${title}${address}${Date.now()}`), employeeCopy: copies.naver, copies: { ...copies }, disclosure,
+      photos: property?.photos ?? (demo ? 10 : 0), hasVideo: property?.hasVideo ?? demo, videoName: property?.videoName, accent: property?.accent ?? accentFor(`${title}${address}${Date.now()}`), employeeCopy: copies.naver, copies: { ...copies }, disclosure,
       targets: property?.targets ?? PLATFORMS.map((platform) => ({ platform, status: "not_requested", progress: 0 })),
     };
     setSaving(true); setSaveError(""); setSaveSuccess(""); setMediaProgress(photos.length ? { phase: "transferring", processed: 0, total: photos.length } : null);
     try {
-      const saved = await onSave(input, photos, persistedProperty?.id ?? property?.id, photos.length ? setMediaProgress : undefined);
+      const saved = await onSave(input, photos, video, persistedProperty?.id ?? property?.id, photos.length ? setMediaProgress : undefined);
       setPersistedProperty(saved);
       setExistingPhotoCount(saved.photos);
       setPhotos([]);
-      setSaveSuccess(photos.length ? `매물과 최적화 사진 ${saved.photos}장을 저장했습니다.` : "매물 정보를 저장했습니다.");
+      setVideo(null);
+      setExistingVideo(saved.hasVideo);
+      setSaveSuccess(photos.length || video ? `매물과 사진 ${saved.photos}장·세로 영상 ${saved.hasVideo ? "1개" : "없음"}를 저장했습니다.` : "매물 정보를 저장했습니다.");
       if (typeof window !== "undefined") window.localStorage.removeItem(PROPERTY_DRAFT_KEY);
     }
     catch (error) { setSaveError(error instanceof Error ? error.message : "매물을 저장하지 못했습니다."); }
@@ -309,6 +313,8 @@ export function PropertyWizard({ mode, employees, property, onClose, onSave, onD
             {photoRestoreNotice && <div className="notice photo-restore-notice"><CircleAlert size={17} /><div><strong>사진을 다시 선택해 주세요.</strong><small>브라우저 보안상 닫기 전에 선택했던 로컬 파일은 자동 복원할 수 없습니다.</small></div></div>}
             <label className="drop-zone media-drop-zone"><input aria-label="매물 사진 선택" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => { setPhotos(Array.from(event.target.files ?? [])); setPhotoRestoreNotice(false); setSaveSuccess(""); }} /><Upload size={28} /><strong>{photos.length ? `교체할 사진 ${photos.length}장을 선택했습니다` : existingPhotoCount ? `저장된 최적화 사진 ${existingPhotoCount}장` : "현장 사진을 선택하세요"}</strong><small>{existingPhotoCount ? "새 사진을 선택하면 저장 시 기존 사진 전체를 교체합니다." : "저장 시 Windows 로컬 Python이 EXIF를 제거하고 축소한 JPEG만 보관합니다."}</small></label>
             <div className="notice" style={{ marginTop: 12 }}><FileCheck2 size={17} /><div><strong>{photos.length ? "Python 최적화·사진 교체 준비 완료" : existingPhotoCount ? "기존 사진 유지" : "JPG·PNG·WebP, 최대 30장"}</strong><small>{photos.length ? photos.map((file) => file.name).join(" · ") : existingPhotoCount ? "사진을 선택하지 않고 저장하면 현재 사진을 그대로 유지합니다." : "원본은 Supabase에 저장하지 않습니다. 사진 없이도 매물 저장은 가능합니다."}</small></div></div>
+            <div className="media-channel-divider"><strong>영상 전용</strong><span>인스타 릴스 · 틱톡 · 유튜브 쇼츠</span></div>
+            <label className="drop-zone media-drop-zone video-drop-zone"><input aria-label="세로 영상 선택" type="file" accept="video/mp4,video/quicktime,video/webm" onChange={(event) => { setVideo(event.target.files?.[0] ?? null); setSaveSuccess(""); }} /><Video size={28} /><strong>{video ? `새 영상 1개 선택 · ${video.name}` : existingVideo ? "저장된 세로 영상 1개" : "세로 폰 영상을 선택하세요"}</strong><small>{existingVideo ? "새 영상을 선택하면 세 SNS 채널의 공용 영상이 교체됩니다." : "높이가 너비보다 큰 MP4·MOV·WebM 한 개만 저장합니다."}</small></label>
           </div>
         )}
         {step === 2 && (
@@ -330,8 +336,8 @@ export function PropertyWizard({ mode, employees, property, onClose, onSave, onD
           <div className="review-card">
             <div className="review-icon"><Check size={28} /></div>
             <h3>{persistedProperty ? "매물 정보를 확인하고 저장하세요" : "매물 등록 준비가 끝났습니다"}</h3>
-            <p>{demo ? "최적화 사진과 건축물대장 조회값을 매물에 저장합니다." : "새 사진이 있으면 Windows Python 최적화와 최적화본 저장까지 끝난 뒤 매물 저장이 완료됩니다."}</p>
-            <div className="review-summary"><span><ImageIcon size={16} /> 사진 <strong>{demo ? "6.8MB" : `${photos.length || existingPhotoCount}장`}</strong></span><span><FileCheck2 size={16} /> 고지사항 <strong>{13 - missing.length}/13</strong></span><span><MessageSquareText size={16} /> 플랫폼 발행 <strong>별도 진행</strong></span></div>
+            <p>{demo ? "네이버·당근용 사진과 세로 영상, 건축물대장 조회값을 매물에 저장합니다." : "사진은 네이버·당근용으로 최적화하고, 세로 영상 1개는 인스타·틱톡·유튜브 쇼츠용으로 별도 저장합니다."}</p>
+            <div className="review-summary"><span><ImageIcon size={16} /> 사진 <strong>{demo ? "10장" : `${photos.length || existingPhotoCount}장`}</strong></span><span><Video size={16} /> 세로 영상 <strong>{video || existingVideo || demo ? "1개" : "없음"}</strong></span><span><MessageSquareText size={16} /> 플랫폼 발행 <strong>별도 진행</strong></span></div>
             <div className="notice"><FileCheck2 size={17} /><div><strong>저장과 플랫폼 발행은 서로 독립적으로 동작합니다.</strong><small>먼저 매물을 저장한 뒤 플랫폼 발행 버튼에서 게시할 채널을 선택합니다.</small></div></div>
             {saveSuccess && <div className="save-success"><Check size={17} /><span>{saveSuccess}</span></div>}
             {saveError && <div className="error-guide"><CircleAlert size={17} /><span>{saveError}</span></div>}

@@ -1,4 +1,4 @@
-export type Platform = "naver" | "instagram" | "daangn" | "zigbang";
+export type Platform = "naver" | "daangn" | "instagram" | "tiktok" | "youtube";
 export type RunnerStatus = "succeeded" | "failed" | "not_configured";
 
 export interface PublishInput {
@@ -8,6 +8,8 @@ export interface PublishInput {
   /** 직원 원고 + 법정 고지 블록을 합친 전체 본문 (하위호환) */
   copy: string;
   imagePaths: string[];
+  /** 인스타·틱톡·유튜브 쇼츠 공용 세로 영상 */
+  videoPath?: string;
   /** 아래는 플랫폼 템플릿용 부가 정보 (없으면 copy 만으로 게시) */
   employeeCopy?: string;
   legalBlock?: string;

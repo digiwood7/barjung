@@ -129,7 +129,7 @@ export class FakeSupabase {
   /** properties 삭제 시 하위 행 cascade 흉내 */
   cascade(table: string, ids: unknown[]) {
     if (table !== "properties" || !ids.length) return;
-    for (const child of ["legal_disclosures", "content_drafts", "property_media", "distribution_jobs"]) {
+    for (const child of ["legal_disclosures", "content_drafts", "property_media", "property_videos", "distribution_jobs"]) {
       this.replace(child, this.rows(child).filter((row) => !ids.includes(row.property_id)));
     }
   }
@@ -142,5 +142,6 @@ export const barjungUniqueKeys: FakeOptions["uniqueKeys"] = {
   properties: [["office_id", "property_number"]],
   distribution_jobs: [["office_id", "idempotency_key"]],
   legal_disclosures: [["property_id"]],
+  property_videos: [["property_id"]],
   app_settings: [["office_id"]],
 };

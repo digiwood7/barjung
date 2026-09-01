@@ -21,9 +21,10 @@ const supabase = createClient(required("SUPABASE_URL"), required("SUPABASE_SERVI
 const agentId = required("BARJUNG_AGENT_ID");
 const adapters = createPlatformAdapters();
 const store = new SupabaseRunnerStore(supabase);
-type RunnerCommand = { id: string; office_id: string; command: "naver_login" };
+type LoginPlatform = "naver" | "instagram" | "daangn";
+type RunnerCommand = { id: string; office_id: string; command: "naver_login" | "instagram_login" | "daangn_login" };
 let activeRunnerCommandId: string | null = null;
-let lastNaverSessionCheckAt = 0;
+let lastPlatformSessionCheckAt = 0;
 let runnerCommandUnavailableWarned = false;
 let localMediaServerStarted = false;
 
@@ -41,10 +42,10 @@ function ensureLocalMediaServer(officeId: string): void {
   localMediaServerStarted = true;
 }
 
-async function updateNaverConnection(officeId: string, status: "connected" | "expired" | "action_required" | "not_configured"): Promise<void> {
+async function updatePlatformConnection(officeId: string, platform: LoginPlatform, status: "connected" | "expired" | "action_required" | "not_configured"): Promise<void> {
   const { error } = await supabase.from("platform_connections").upsert({
     office_id: officeId,
-    platform: "naver",
+    platform,
     status,
     last_checked_at: new Date().toISOString(),
   }, { onConflict: "office_id,platform" });
@@ -53,7 +54,8 @@ async function updateNaverConnection(officeId: string, status: "connected" | "ex
 
 async function completeRunnerCommand(command: RunnerCommand, succeeded: boolean, message: string): Promise<void> {
   try {
-    await updateNaverConnection(command.office_id, succeeded ? "connected" : "expired");
+    const platform: LoginPlatform = command.command === "instagram_login" ? "instagram" : command.command === "daangn_login" ? "daangn" : "naver";
+    await updatePlatformConnection(command.office_id, platform, succeeded ? "connected" : "expired");
     const { error } = await supabase.from("runner_commands").update({
       status: succeeded ? "succeeded" : "failed",
       result_message: message,
@@ -71,7 +73,8 @@ async function completeRunnerCommand(command: RunnerCommand, succeeded: boolean,
 function startRunnerCommand(command: RunnerCommand): void {
   activeRunnerCommandId = command.id;
   const executable = process.platform === "win32" ? process.env.ComSpec || "C:\\Windows\\System32\\cmd.exe" : "npm";
-  const args = process.platform === "win32" ? ["/d", "/s", "/c", "npm.cmd", "run", "naver:login"] : ["run", "naver:login"];
+  const script = command.command === "instagram_login" ? "instagram:login" : command.command === "daangn_login" ? "daangn:login" : "naver:login";
+  const args = process.platform === "win32" ? ["/d", "/s", "/c", "npm.cmd", "run", script] : ["run", script];
   const child = spawn(executable, args, {
     cwd: process.cwd(),
     env: process.env,
@@ -85,14 +88,16 @@ function startRunnerCommand(command: RunnerCommand): void {
     void completeRunnerCommand(command, succeeded, message);
   };
   child.once("error", (error) => finish(false, error.message));
-  child.once("exit", (code) => finish(code === 0, code === 0 ? "네이버 로그인 저장 및 확인 완료" : `네이버 로그인 종료 코드 ${code ?? "unknown"}`));
+  child.once("exit", (code) => finish(code === 0, code === 0 ? `${script.startsWith("instagram") ? "인스타" : script.startsWith("daangn") ? "당근" : "네이버"} 로그인 저장 및 확인 완료` : `${script} 종료 코드 ${code ?? "unknown"}`));
 }
 
-async function refreshNaverSession(officeId: string): Promise<void> {
-  if (Date.now() - lastNaverSessionCheckAt < 300_000) return;
-  lastNaverSessionCheckAt = Date.now();
-  const result = await adapters.naver.checkSession();
-  await updateNaverConnection(officeId, result.status);
+async function refreshPlatformSessions(officeId: string): Promise<void> {
+  if (Date.now() - lastPlatformSessionCheckAt < 300_000) return;
+  lastPlatformSessionCheckAt = Date.now();
+  for (const platform of ["naver", "instagram", "daangn"] as const) {
+    const result = await adapters[platform].checkSession();
+    await updatePlatformConnection(officeId, platform, result.status);
+  }
 }
 
 async function heartbeat(): Promise<void> {
@@ -129,7 +134,7 @@ async function tick(): Promise<void> {
   const { data: agent, error: agentError } = await supabase.from("local_agents").select("office_id").eq("id", agentId).single();
   if (agentError) throw new Error(`runner office lookup failed: ${agentError.code}`);
   ensureLocalMediaServer(String(agent.office_id));
-  await refreshNaverSession(String(agent.office_id));
+  await refreshPlatformSessions(String(agent.office_id));
 
   const { data: mediaData, error: mediaError } = await supabase.rpc("claim_media_optimization_job", { p_agent_id: agentId, p_lease_seconds: 1800 });
   if (mediaError) throw new Error(`media queue claim failed: ${mediaError.code}`);
@@ -158,8 +163,13 @@ async function tick(): Promise<void> {
     lease_expires_at: null,
   }).eq("id", target.id).eq("lease_agent_id", agentId);
   if (targetError) throw new Error(`target update failed: ${targetError.code}`);
-  if (input.platform === "naver") {
-    await updateNaverConnection(String(agent.office_id), result.status === "succeeded" ? "connected" : result.errorCode === "auth_expired" ? "expired" : "action_required");
+  if (input.platform === "naver" || input.platform === "instagram") {
+    const connectionStatus = result.status === "succeeded" || result.errorCode === "draft_saved"
+      ? "connected"
+      : result.errorCode === "auth_expired"
+        ? "expired"
+        : "action_required";
+    await updatePlatformConnection(String(agent.office_id), input.platform, connectionStatus);
   }
   const { error: eventError } = await supabase.from("distribution_events").insert({
     office_id: target.office_id,

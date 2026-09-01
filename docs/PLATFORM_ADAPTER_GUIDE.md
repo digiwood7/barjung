@@ -32,12 +32,32 @@ DGagent `tools/skill-naver-blog-write/scripts/{_browser,_naver_editor}.py` 의 *
 
 로그인이 만료되면 target 이 `auth_expired` 로 실패한다 → 2번을 다시 한다(2단계 인증이라 자동 복구 없음).
 
+## 세로 영상 채널 (인스타 릴스·틱톡·유튜브 쇼츠)
+
+운영 계정의 최근 게시물 10개에서 확인한 형식을 템플릿으로 사용한다.
+
+`한 줄 훅 → 보증금/월세 → 문의 블록 → 공인중개사법 명시사항 → 사무소 등록정보 → 지역 해시태그`
+
+- `runner/src/adapters/instagram/compose.ts`: 2,200자 제한 안에서 위 순서로 캡션을 만들며 법정 명시사항은 자르지 않는다.
+- 매물별 세로 영상은 `property-videos` 비공개 버킷에 정확히 1개만 저장한다. 사진은 네이버·당근에서만 사용한다.
+- `runner/src/adapters/instagram/editor.ts`: 만들기 → 세로 영상 1개 선택 → 다음 2회 → 문구 입력 → 릴스 임시 저장/공유를 role 기반으로 조작한다.
+- `runner/src/adapters/instagram/adapter.ts`: 별도 영구 프로필, 중복 제목 확인, draft/publish 모드, 새 게시물 URL 확인을 담당한다.
+- CAPTCHA·로그인·추가 인증은 우회하지 않고 `npm --prefix runner run instagram:login` 으로 사용자가 직접 완료한다.
+
+### 고객 PC 연결 순서
+
+1. `.env.local` 에 `BARJUNG_INSTAGRAM_USERNAME`, 문의 줄, 사무소 등록정보, 해시태그를 입력한다.
+2. `npm --prefix runner run instagram:login` 을 실행하고 열린 Chrome에서 로그인·추가 인증을 완료한다.
+3. `BARJUNG_INSTAGRAM_ENABLED=true`, `BARJUNG_INSTAGRAM_MODE=draft`, `BARJUNG_HEADLESS=false` 로 매물 하나를 배포해 세로 영상과 캡션을 확인한다.
+4. 확인 후 `BARJUNG_INSTAGRAM_MODE=publish` 로 바꾼다. 안정화 뒤 공통 `BARJUNG_HEADLESS=true` 로 전환할 수 있다.
+
 ## 연결 순서
 
 1. `runner/src/adapters/naver.ts` — 위 절 참고
-2. `runner/src/adapters/instagram.ts`
+2. `runner/src/adapters/instagram.ts` — 위 절 참고
 3. `runner/src/adapters/daangn.ts`
-4. `runner/src/adapters/zigbang.ts`
+4. `runner/src/adapters/tiktok.ts` (세로 영상, 연결 예정)
+5. `runner/src/adapters/youtube.ts` (쇼츠, 연결 예정)
 
 각 adapter는 `checkSession`, `publish`, 게시 URL 확인과 오류 분류 계약을 지켜야 합니다. 한 플랫폼을 구현할 때마다 해당 사이트용 fixture·계약 테스트를 추가하고 headed 회귀 테스트를 통과한 뒤에만 활성화합니다.
 

@@ -1,6 +1,6 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
-export type PlatformName = "naver" | "instagram" | "daangn" | "zigbang";
+export type PlatformName = "naver" | "instagram" | "daangn" | "zigbang" | "tiktok" | "youtube";
 export type PublishStatus = "not_requested" | "queued" | "running" | "succeeded" | "failed" | "cancelled" | "not_configured";
 
 type Row<T> = T & { id: string; office_id: string; created_at: string };
@@ -16,7 +16,7 @@ export interface Database {
       distribution_jobs: { Row: Row<{ property_id: string; mode: "review" | "automatic"; overall_status: PublishStatus; idempotency_key: string; requested_at: string }> };
       distribution_targets: { Row: Row<{ distribution_job_id: string; platform: PlatformName; status: PublishStatus; error_code: string | null; error_summary: string | null; retry_count: number; published_url: string | null; lease_agent_id: string | null; lease_expires_at: string | null; updated_at: string }> };
       local_agents: { Row: Row<{ device_name: string; operating_system: string; version: string; status: "online" | "offline" | "degraded"; last_heartbeat_at: string | null; updated_at: string }> };
-      runner_commands: { Row: Row<{ command: "naver_login"; status: "queued" | "running" | "succeeded" | "failed"; result_message: string | null; lease_agent_id: string | null; lease_expires_at: string | null; started_at: string | null; completed_at: string | null; updated_at: string }> };
+      runner_commands: { Row: Row<{ command: "naver_login" | "instagram_login" | "daangn_login"; status: "queued" | "running" | "succeeded" | "failed"; result_message: string | null; lease_agent_id: string | null; lease_expires_at: string | null; started_at: string | null; completed_at: string | null; updated_at: string }> };
     };
     Views: Record<string, never>;
     Functions: {

@@ -43,6 +43,8 @@ export interface BarjungRepository {
   getProperty(id: string): Promise<Property | null>;
   /** 로컬 Python으로 사진을 최적화한 뒤 고객 Storage에 저장한다. */
   uploadPropertyMedia(propertyId: string, files: File[], onProgress?: (progress: MediaUploadProgress) => void): Promise<Property>;
+  /** 세로 영상 1개를 인스타·틱톡·유튜브 쇼츠 공용 원본으로 저장한다. */
+  uploadPropertyVideo(propertyId: string, file: File): Promise<Property>;
   /** 플랫폼 배포 작업을 만든다(생략하면 4개 전부). 라이브 모드에서는 Windows 실행기가 큐를 가져간다. */
   requestDistribution(propertyId: string, platforms?: Platform[]): Promise<Property>;
   updateSettings(patch: Partial<AppSettings>): Promise<AppSettings>;
@@ -118,6 +120,11 @@ export function createDemoRepository(seed: DemoSeed): BarjungRepository {
       const property = await this.getProperty(propertyId);
       if (!property) throw new Error("매물을 찾을 수 없습니다.");
       return properties.update(propertyId, { photos: files.length });
+    },
+    async uploadPropertyVideo(propertyId, file) {
+      const property = await this.getProperty(propertyId);
+      if (!property) throw new Error("매물을 찾을 수 없습니다.");
+      return properties.update(propertyId, { hasVideo: true, videoName: file.name });
     },
     async requestDistribution(propertyId, platforms) {
       const property = await this.getProperty(propertyId);

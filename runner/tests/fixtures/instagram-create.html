@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><title>Instagram create fixture</title></head>
+<body>
+  <nav><a href="#" aria-label="새로운 게시물">만들기</a></nav>
+  <main>
+    <a href="/example_realty/p/old-post/"><img alt="기존 매물 게시글"></a>
+  </main>
+  <section id="menu" hidden><a href="#" aria-label="게시물 게시물">게시물</a></section>
+  <div id="composer" role="dialog" aria-label="새 게시물 만들기" hidden>
+    <button id="close" aria-label="닫기">×</button>
+    <h1>새 게시물 만들기</h1>
+    <section id="select-stage">
+      <input id="files" type="file" multiple hidden>
+      <button id="select">컴퓨터에서 선택</button>
+    </section>
+    <section id="crop-stage" hidden><h2>자르기</h2><button class="next">다음</button></section>
+    <section id="filter-stage" hidden><h2>필터</h2><button class="next">다음</button></section>
+    <section id="caption-stage" hidden>
+      <textarea aria-label="문구를 입력하세요..."></textarea>
+      <button id="share">공유하기</button>
+    </section>
+  </div>
+  <div id="confirm" role="dialog" aria-label="게시물을 임시 저장하시겠어요?" hidden>
+    <button id="save">임시 저장</button><button id="discard">삭제</button>
+  </div>
+  <div id="success" hidden>게시물이 공유되었습니다.</div>
+  <script>
+    const show = (id) => document.getElementById(id).hidden = false;
+    const hide = (id) => document.getElementById(id).hidden = true;
+    document.querySelector('[aria-label="새로운 게시물"]').onclick = (event) => { event.preventDefault(); show('menu'); };
+    document.querySelector('[aria-label="게시물 게시물"]').onclick = (event) => { event.preventDefault(); hide('menu'); show('composer'); };
+    document.getElementById('select').onclick = () => document.getElementById('files').click();
+    document.getElementById('files').onchange = () => { hide('select-stage'); show('crop-stage'); };
+    document.querySelector('#crop-stage .next').onclick = () => { hide('crop-stage'); show('filter-stage'); };
+    document.querySelector('#filter-stage .next').onclick = () => { hide('filter-stage'); show('caption-stage'); };
+    document.getElementById('close').onclick = () => { hide('composer'); show('confirm'); };
+    document.getElementById('save').onclick = () => { hide('confirm'); document.body.dataset.saved = 'true'; };
+    document.getElementById('share').onclick = () => {
+      hide('composer'); show('success');
+      const link = document.createElement('a'); link.href = '/example_realty/p/new-post/'; link.innerHTML = '<img alt="새 매물 게시글">';
+      document.querySelector('main').prepend(link);
+    };
+  </script>
+</body>
+</html>

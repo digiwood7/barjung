@@ -24,6 +24,7 @@ export function SettingsView({ settings, agent, connections = [], office, mode, 
   const [showConnection, setShowConnection] = useState(false);
   const [inquiryDraft, setInquiryDraft] = useState("");
   const photoCount = properties.reduce((sum, property) => sum + property.photos, 0);
+  const videoCount = properties.filter((property) => property.hasVideo).length;
   const auto = settings.publishMode === "automatic";
 
   const addInquiryType = async (event: React.FormEvent) => {
@@ -62,7 +63,7 @@ export function SettingsView({ settings, agent, connections = [], office, mode, 
         <PlatformConnectionCards connections={connections} onRefresh={onRefresh} />
         <div className="panel setting-card">
           <div className="setting-icon blue"><Database size={20} /></div>
-          <div><h3>Supabase 저장공간</h3><p>최적화 사진만 저장합니다.</p><div className="storage-bar"><i style={{ width: `${Math.min(100, photoCount)}%` }} /></div><small>{mode === "live" ? `최적화 사진 ${photoCount}장 저장됨` : "데모 모드 — 저장공간 집계 없음"}</small></div>
+          <div><h3>Supabase 저장공간</h3><p>최적화 사진과 세로 영상 원본을 분리 저장합니다.</p><div className="storage-bar"><i style={{ width: `${Math.min(100, photoCount + videoCount)}%` }} /></div><small>{mode === "live" ? `사진 ${photoCount}장 · 세로 영상 ${videoCount}개 저장됨` : "데모 모드 — 저장공간 집계 없음"}</small></div>
         </div>
         <div className="panel inquiry-settings span-2">
           <div className="panel-head"><div><span className="eyebrow">CUSTOMER INQUIRY</span><h2>고객 문의 유형</h2><p>추가한 항목은 고객 등록 모달의 문의 유형 선택지에 바로 반영됩니다.</p></div></div>
